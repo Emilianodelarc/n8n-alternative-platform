@@ -424,7 +424,39 @@ async function executeNode(
     }
 
     case 'slack-message': {
-      return unsupportedRealNode(type)
+      const { channel, message, blocks, operation } = config as {
+        channel?: string
+        message?: string
+        blocks?: string
+        operation?: string
+      }
+      const headers = {
+        ...requireRealModeCredential(config, 'Slack'),
+        'Content-Type': 'application/json',
+      }
+
+      if ((operation || 'post') !== 'post') {
+        return unsupportedRealNode(`${type}:${operation}`)
+      }
+
+      if (!channel) throw new Error('Slack channel is required')
+      if (!message && !blocks) throw new Error('Slack message or blocks are required')
+
+      const response = await requestJson('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          channel,
+          text: message || undefined,
+          blocks: blocks ? parseJsonConfig(blocks, []) : undefined,
+        }),
+      })
+
+      if (response && typeof response === 'object' && (response as Record<string, unknown>).ok === false) {
+        throw new Error(`Slack API error: ${(response as Record<string, unknown>).error || 'unknown_error'}`)
+      }
+
+      return response
     }
 
     case 'respond-to-webhook':

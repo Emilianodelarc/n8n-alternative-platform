@@ -1,5 +1,14 @@
 import type { Workflow, WorkflowExecution } from './types'
 
+export interface CredentialSummary {
+  id: string
+  name: string
+  service: string
+  config: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
 async function parseJson<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -55,3 +64,27 @@ export async function fetchBackendExecutions(workflowId: string) {
   return data.executions
 }
 
+export async function fetchBackendCredentials() {
+  const response = await fetch('/api/credentials', { cache: 'no-store' })
+  const data = await parseJson<{ credentials: CredentialSummary[] }>(response)
+  return data.credentials
+}
+
+export async function createBackendCredential(input: {
+  name: string
+  service: string
+  config: Record<string, unknown>
+}) {
+  const response = await fetch('/api/credentials', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const data = await parseJson<{ credential: CredentialSummary }>(response)
+  return data.credential
+}
+
+export async function deleteBackendCredential(id: string) {
+  const response = await fetch(`/api/credentials/${id}`, { method: 'DELETE' })
+  await parseJson<{ ok: boolean }>(response)
+}

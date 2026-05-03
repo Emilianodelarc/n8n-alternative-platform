@@ -17,11 +17,23 @@ type CredentialRow = {
 }
 
 function mapCredential(row: CredentialRow) {
+  const safeConfig = Object.fromEntries(
+    Object.entries(row.config || {}).map(([key, value]) => [
+      key,
+      key.toLowerCase().includes('token') ||
+      key.toLowerCase().includes('password') ||
+      key.toLowerCase().includes('secret') ||
+      key.toLowerCase().includes('key')
+        ? '••••••••'
+        : value,
+    ])
+  )
+
   return {
     id: row.id,
     name: row.name,
     service: row.service,
-    config: row.config || {},
+    config: safeConfig,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }
