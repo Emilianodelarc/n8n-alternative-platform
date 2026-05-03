@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -169,6 +169,14 @@ interface ExpressionSuggestion {
   value?: unknown
 }
 
+const hiddenMapperPaths = new Set([
+  'input.triggered',
+  'input.method',
+  'input.path',
+  'input.responseMode',
+  'input.timestamp',
+])
+
 function parseJson(value: unknown, fallback: unknown) {
   if (typeof value !== 'string' || value.trim() === '') return fallback
   try {
@@ -188,16 +196,15 @@ function summarizeValue(value: unknown) {
 
 function collectExpressionPaths(value: unknown, prefix: string, depth = 0): ExpressionSuggestion[] {
   if (depth > 3 || value === null || value === undefined) return []
+  if (hiddenMapperPaths.has(prefix)) return []
 
   if (Array.isArray(value)) {
     const first = value[0]
-    return [
-      { label: `${prefix}[]`, expression: `{{${prefix}}}`, value },
-      ...collectExpressionPaths(first, `${prefix}.0`, depth + 1),
-    ]
+    return collectExpressionPaths(first, `${prefix}.0`, depth + 1)
   }
 
   if (typeof value !== 'object') {
+    if (typeof value === 'boolean') return []
     return [{ label: prefix, expression: `{{${prefix}}}`, value }]
   }
 
@@ -228,6 +235,20 @@ function getExampleOutputForNode(node: WorkflowNode) {
   return null
 }
 
+function autoScrollConfigPanel(clientY: number, scrollContainer: HTMLDivElement) {
+  const rect = scrollContainer.getBoundingClientRect()
+  const edgeSize = 110
+  const maxSpeed = 22
+  const distanceToTop = clientY - rect.top
+  const distanceToBottom = rect.bottom - clientY
+
+  if (distanceToTop < edgeSize) {
+    scrollContainer.scrollTop -= Math.ceil(((edgeSize - distanceToTop) / edgeSize) * maxSpeed)
+  } else if (distanceToBottom < edgeSize) {
+    scrollContainer.scrollTop += Math.ceil(((edgeSize - distanceToBottom) / edgeSize) * maxSpeed)
+  }
+}
+
 export function NodePanel({ className }: NodePanelProps) {
   const { t, tt, locale } = useI18n()
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -249,6 +270,7 @@ export function NodePanel({ className }: NodePanelProps) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [isDraggingExpression, setIsDraggingExpression] = useState(false)
   const [dragTargetField, setDragTargetField] = useState<string | null>(null)
+  const configScrollRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (node?.data.config) {
@@ -332,7 +354,18 @@ export function NodePanel({ className }: NodePanelProps) {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'copy'
     setDragTargetField(field.key)
+
+    const scrollContainer = configScrollRef.current
+    if (scrollContainer) {
+      autoScrollConfigPanel(event.clientY, scrollContainer)
+    }
   }, [])
+
+  const handleConfigDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!isDraggingExpression) return
+    event.preventDefault()
+    if (configScrollRef.current) autoScrollConfigPanel(event.clientY, configScrollRef.current)
+  }, [isDraggingExpression])
 
   const clearDragTarget = useCallback(() => {
     setDragTargetField(null)
@@ -668,7 +701,7 @@ export function NodePanel({ className }: NodePanelProps) {
         </TabsList>
 
         <div className="flex-1 min-h-0 overflow-hidden">
-          <ScrollArea className="h-full">
+          <div ref={configScrollRef} className="h-full overflow-y-auto" onDragOver={handleConfigDragOver}>
             <TabsContent value="config" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
             <div className="rounded-lg border border-border bg-card/60 p-3 space-y-3">
               <div className="flex items-start gap-2">
@@ -971,7 +1004,7 @@ export function NodePanel({ className }: NodePanelProps) {
               </div>
             </div>
           </TabsContent>
-          </ScrollArea>
+          </div>
         </div>
       </Tabs>
 
