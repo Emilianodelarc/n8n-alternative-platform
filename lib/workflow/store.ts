@@ -32,6 +32,20 @@ const safeStorage = {
   },
 }
 
+function variablesToRecord(variables: GlobalVariable[]) {
+  return Object.fromEntries(variables.map((variable) => [variable.name, variable.value]))
+}
+
+function withGlobalVariables(workflow: Workflow, variables: GlobalVariable[]) {
+  return {
+    ...workflow,
+    variables: {
+      ...(workflow.variables || {}),
+      ...variablesToRecord(variables),
+    },
+  }
+}
+
 interface WorkflowState {
   // Workflows
   workflows: Workflow[]
@@ -386,7 +400,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       saveWorkflowToBackend: async (id) => {
         const workflow = get().workflows.find((w) => w.id === id)
         if (!workflow) return
-        await saveBackendWorkflow(workflow)
+        await saveBackendWorkflow(withGlobalVariables(workflow, get().globalVariables))
       },
 
       loadExecutionsFromBackend: async (workflowId) => {

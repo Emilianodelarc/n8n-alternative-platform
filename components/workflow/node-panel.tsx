@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useWorkflowStore } from '@/lib/workflow/store'
-import { NODE_TYPES, type ConfigField, type NodeCategory } from '@/lib/workflow/types'
+import { NODE_TYPES, type ConfigField, type NodeCategory, type WorkflowNode } from '@/lib/workflow/types'
 import { useI18n } from '@/lib/i18n'
 import { X, Trash2, Settings, Play, Code, Info, Copy, Check, AlertCircle, KeyRound, ClipboardList, ArrowRight } from 'lucide-react'
 
@@ -163,6 +163,71 @@ interface NodePanelProps {
   className?: string
 }
 
+interface ExpressionSuggestion {
+  label: string
+  expression: string
+  value?: unknown
+}
+
+function parseJson(value: unknown, fallback: unknown) {
+  if (typeof value !== 'string' || value.trim() === '') return fallback
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function summarizeValue(value: unknown) {
+  if (value === undefined) return ''
+  if (value === null) return 'null'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value)
+}
+
+function collectExpressionPaths(value: unknown, prefix: string, depth = 0): ExpressionSuggestion[] {
+  if (depth > 3 || value === null || value === undefined) return []
+
+  if (Array.isArray(value)) {
+    const first = value[0]
+    return [
+      { label: `${prefix}[]`, expression: `{{${prefix}}}`, value },
+      ...collectExpressionPaths(first, `${prefix}.0`, depth + 1),
+    ]
+  }
+
+  if (typeof value !== 'object') {
+    return [{ label: prefix, expression: `{{${prefix}}}`, value }]
+  }
+
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, item]) =>
+    collectExpressionPaths(item, `${prefix}.${key}`, depth + 1)
+  )
+}
+
+function getExampleOutputForNode(node: WorkflowNode) {
+  const config = node.data.config || {}
+
+  if (node.type === 'webhook-trigger') {
+    return {
+      method: config.method || 'POST',
+      path: config.path || '',
+      responseMode: config.responseMode || 'immediate',
+      data: parseJson(config.samplePayload, {}),
+    }
+  }
+
+  if (node.type === 'manual-trigger') {
+    return {
+      triggered: true,
+      data: parseJson(config.outputData, {}),
+    }
+  }
+
+  return null
+}
+
 export function NodePanel({ className }: NodePanelProps) {
   const { t, tt, locale } = useI18n()
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -171,6 +236,7 @@ export function NodePanel({ className }: NodePanelProps) {
   const updateNodeConfig = useWorkflowStore((s) => s.updateNodeConfig)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const setSelectedNode = useWorkflowStore((s) => s.setSelectedNode)
+  const globalVariables = useWorkflowStore((s) => s.globalVariables)
   const currentExecution = useWorkflowStore((s) => s.currentExecution)
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
 
@@ -452,6 +518,31 @@ export function NodePanel({ className }: NodePanelProps) {
     .filter((edge) => edge.source === node.id)
     .map((edge) => workflow.nodes.find((workflowNode) => workflowNode.id === edge.target))
     .filter(Boolean) || []
+  const variableSuggestions: ExpressionSuggestion[] = [
+    ...globalVariables.map((variable) => ({
+      label: `variables.${variable.name}`,
+      expression: `{{variables.${variable.name}}}`,
+      value: variable.value,
+    })),
+    ...Object.entries(workflow?.variables || {})
+      .filter(([name]) => !globalVariables.some((variable) => variable.name === name))
+      .map(([name, value]) => ({
+        label: `variables.${name}`,
+        expression: `{{variables.${name}}}`,
+        value,
+      })),
+  ]
+  const inputSuggestions = incomingNodes.flatMap((incoming) => {
+    if (!incoming) return []
+    const executedOutput = currentExecution?.nodeResults[incoming.id]?.output
+    const exampleOutput = executedOutput ?? getExampleOutputForNode(incoming)
+    return collectExpressionPaths(exampleOutput, 'input')
+  })
+  const expressionSuggestions = [...variableSuggestions, ...inputSuggestions].slice(0, 16)
+
+  const copyExpression = (expression: string) => {
+    void navigator.clipboard.writeText(expression)
+  }
 
   return (
     <div className={cn('flex flex-col h-full bg-sidebar border-l border-sidebar-border', className)}>
@@ -561,6 +652,35 @@ export function NodePanel({ className }: NodePanelProps) {
                   ))}
                 </ul>
               </div>
+
+              {expressionSuggestions.length > 0 && (
+                <div className="rounded-md border border-border bg-background/40 p-2">
+                  <p className="text-xs font-medium text-foreground">Expresiones disponibles</p>
+                  <div className="mt-2 space-y-1.5">
+                    {expressionSuggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.label}-${suggestion.expression}`}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded border border-border bg-muted/40 px-2 py-1.5 text-left hover:bg-muted"
+                        onClick={() => copyExpression(suggestion.expression)}
+                      >
+                        <span className="min-w-0">
+                          <code className="block truncate text-[11px] text-primary">{suggestion.expression}</code>
+                          {suggestion.value !== undefined && (
+                            <span className="block truncate text-[10px] text-muted-foreground">
+                              {summarizeValue(suggestion.value)}
+                            </span>
+                          )}
+                        </span>
+                        <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[10px] text-muted-foreground">
+                    Click para copiar y pegar en To, Subject, Body u otros campos.
+                  </p>
+                </div>
+              )}
 
               <p className="text-xs leading-relaxed text-muted-foreground">
                 <span className="font-medium text-foreground">{t('nextStep')}:</span> {tt(guide.nextStep)}
