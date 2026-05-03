@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,6 +48,11 @@ export default function DashboardPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const filteredWorkflows = workflows.filter(
     (w) =>
@@ -244,8 +249,8 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        <span>
-                          {new Date(workflow.updatedAt).toLocaleDateString()}
+                        <span suppressHydrationWarning>
+                          {mounted ? new Date(workflow.updatedAt).toLocaleDateString() : ''}
                         </span>
                       </div>
                     </div>
