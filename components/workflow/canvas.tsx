@@ -191,7 +191,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   }
 
   return (
-    <div ref={reactFlowWrapper} className={cn('h-full w-full', className)}>
+    <div ref={reactFlowWrapper} className={cn('h-full w-full overflow-hidden', className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
