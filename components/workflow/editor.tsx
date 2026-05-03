@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { NodeLibrary } from './node-library'
 import { WorkflowCanvas } from './canvas'
@@ -24,10 +24,12 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   const updateNodeExecution = useWorkflowStore((s) => s.updateNodeExecution)
   const completeExecution = useWorkflowStore((s) => s.completeExecution)
 
-  // Set active workflow on mount
-  useState(() => {
+  // Set active workflow on mount and rehydrate store
+  useEffect(() => {
+    // Rehydrate zustand store on client
+    useWorkflowStore.persist.rehydrate()
     setActiveWorkflow(workflowId)
-  })
+  }, [workflowId, setActiveWorkflow])
 
   const handleExecute = useCallback(async () => {
     if (!workflow || isExecuting) return

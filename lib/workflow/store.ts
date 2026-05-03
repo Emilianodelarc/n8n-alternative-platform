@@ -1,7 +1,35 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution, NodeExecutionResult, ExecutionStatus } from './types'
 import { v4 as uuid } from 'uuid'
+
+// Safe localStorage that works on both server and client
+const safeStorage = {
+  getItem: (name: string) => {
+    if (typeof window === 'undefined') return null
+    try {
+      return localStorage.getItem(name)
+    } catch {
+      return null
+    }
+  },
+  setItem: (name: string, value: string) => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(name, value)
+    } catch {
+      // Ignore storage errors
+    }
+  },
+  removeItem: (name: string) => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.removeItem(name)
+    } catch {
+      // Ignore storage errors
+    }
+  },
+}
 
 interface WorkflowState {
   // Workflows
@@ -476,10 +504,12 @@ export const useWorkflowStore = create<WorkflowState>()(
     }),
     {
       name: 'workflow-storage',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (state) => ({
         workflows: state.workflows,
         executionHistory: state.executionHistory,
       }),
+      skipHydration: true,
     }
   )
 )

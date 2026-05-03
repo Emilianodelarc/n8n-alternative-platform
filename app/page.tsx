@@ -51,6 +51,8 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    // Rehydrate store from localStorage on client
+    useWorkflowStore.persist.rehydrate()
     setMounted(true)
   }, [])
 
