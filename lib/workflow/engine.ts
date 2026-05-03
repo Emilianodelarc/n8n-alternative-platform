@@ -216,6 +216,77 @@ function requireRealModeCredential(config: Record<string, unknown>, service: str
   return headers
 }
 
+function toBase64Url(value: string) {
+  return Buffer.from(value, 'utf8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function normalizeEmailList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean)
+  if (typeof value !== 'string') return []
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function parseStringArray(value: unknown): string[] {
+  const parsed = parseJsonConfig(value, [])
+  if (!Array.isArray(parsed)) return []
+  return parsed.map(String).filter(Boolean)
+}
+
+function buildEmailRaw(config: Record<string, unknown>) {
+  const from = String(config.from || '').trim()
+  const to = normalizeEmailList(config.to)
+  const cc = normalizeEmailList(config.cc)
+  const bcc = normalizeEmailList(config.bcc)
+  const subject = String(config.subject || '').trim()
+  const body = String(config.body || config.message || '')
+  const emailFormat = String(config.emailFormat || 'html')
+
+  if (to.length === 0) throw new Error('Email recipient is required')
+  if (!subject) throw new Error('Email subject is required')
+
+  const headers = [
+    from ? `From: ${from}` : '',
+    `To: ${to.join(', ')}`,
+    cc.length > 0 ? `Cc: ${cc.join(', ')}` : '',
+    bcc.length > 0 ? `Bcc: ${bcc.join(', ')}` : '',
+    `Subject: ${subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: ${emailFormat === 'text' ? 'text/plain' : 'text/html'}; charset=UTF-8`,
+    'Content-Transfer-Encoding: 8bit',
+  ].filter(Boolean)
+
+  return toBase64Url(`${headers.join('\r\n')}\r\n\r\n${body}`)
+}
+
+function buildCalendarEvent(config: Record<string, unknown>) {
+  const options = parseJsonConfig(config.options, {}) as Record<string, unknown>
+  const attendees = parseJsonConfig(config.attendees, []) as unknown[]
+  const start = String(config.start || '')
+  const end = String(config.end || '')
+
+  if (!config.summary) throw new Error('Calendar event summary is required')
+  if (!start || !end) throw new Error('Calendar event start and end are required')
+
+  return {
+    ...options,
+    summary: config.summary,
+    description: config.description,
+    location: config.location,
+    start: { dateTime: start, timeZone: options.timeZone },
+    end: { dateTime: end, timeZone: options.timeZone },
+    attendees: attendees.map((attendee) =>
+      typeof attendee === 'string' ? { email: attendee } : attendee
+    ),
+  }
+}
+
 async function requestJson(url: string, init: RequestInit): Promise<unknown> {
   const response = await fetch(url, init)
   const contentType = response.headers.get('content-type')
@@ -420,7 +491,20 @@ async function executeNode(
     }
 
     case 'send-email': {
-      return unsupportedRealNode(type)
+      const headers = {
+        ...requireRealModeCredential(config, 'Email Send'),
+        'Content-Type': 'application/json',
+      }
+      const attachments = parseJsonConfig(config.attachments, []) as unknown[]
+      if (attachments.length > 0) {
+        throw new Error('Email attachments are not implemented yet for Gmail API sending')
+      }
+
+      return requestJson('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ raw: buildEmailRaw(config) }),
+      })
     }
 
     case 'slack-message': {
@@ -842,8 +926,200 @@ async function executeNode(
       })
     }
 
-    case 'gmail':
-    case 'google-calendar':
+    case 'gmail': {
+      const { resource, operation, messageId, labels, options } = config as {
+        resource?: string
+        operation?: string
+        messageId?: string
+        labels?: string
+        options?: string
+      }
+      const headers = {
+        ...requireRealModeCredential(config, 'Gmail'),
+        'Content-Type': 'application/json',
+      }
+      const resolvedResource = resource || 'message'
+      const resolvedOperation = operation || 'send'
+      const parsedOptions = parseJsonConfig(options, {}) as Record<string, unknown>
+
+      if (resolvedResource === 'draft') {
+        if (resolvedOperation !== 'createDraft' && resolvedOperation !== 'create') {
+          return unsupportedRealNode(`gmail:${resolvedResource}:${resolvedOperation}`)
+        }
+
+        return requestJson('https://gmail.googleapis.com/gmail/v1/users/me/drafts', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message: { raw: buildEmailRaw(config) } }),
+        })
+      }
+
+      if (resolvedResource !== 'message') {
+        return unsupportedRealNode(`gmail:${resolvedResource}:${resolvedOperation}`)
+      }
+
+      if (resolvedOperation === 'send') {
+        const attachments = parseJsonConfig(config.attachments, []) as unknown[]
+        if (attachments.length > 0) {
+          throw new Error('Gmail attachments are not implemented yet')
+        }
+
+        return requestJson('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ raw: buildEmailRaw(config) }),
+        })
+      }
+
+      if (resolvedOperation === 'reply') {
+        if (!messageId) throw new Error('Message ID is required to reply')
+        const original = await requestJson(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=metadata`,
+          { headers }
+        ) as Record<string, unknown>
+        const threadId = String(original.threadId || parsedOptions.threadId || '')
+
+        return requestJson('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ raw: buildEmailRaw(config), threadId }),
+        })
+      }
+
+      if (resolvedOperation === 'get') {
+        if (!messageId) throw new Error('Message ID is required')
+        const format = String(parsedOptions.format || 'full')
+        return requestJson(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=${encodeURIComponent(format)}`,
+          { headers }
+        )
+      }
+
+      if (resolvedOperation === 'getMany') {
+        const params = new URLSearchParams()
+        const query = String(parsedOptions.query || parsedOptions.q || '')
+        const maxResults = Number(parsedOptions.limit || parsedOptions.maxResults || 10)
+        if (query) params.set('q', query)
+        params.set('maxResults', String(maxResults))
+        return requestJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params.toString()}`, {
+          headers,
+        })
+      }
+
+      if (resolvedOperation === 'delete') {
+        if (!messageId) throw new Error('Message ID is required to delete')
+        return requestJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`, {
+          method: 'DELETE',
+          headers,
+        })
+      }
+
+      if (resolvedOperation === 'addLabel') {
+        if (!messageId) throw new Error('Message ID is required to add labels')
+        return requestJson(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ addLabelIds: parseStringArray(labels) }),
+        })
+      }
+
+      return unsupportedRealNode(`gmail:${resolvedOperation}`)
+    }
+
+    case 'google-calendar': {
+      const { resource, operation, calendarId, eventId } = config as {
+        resource?: string
+        operation?: string
+        calendarId?: string
+        eventId?: string
+      }
+      const headers = {
+        ...requireRealModeCredential(config, 'Google Calendar'),
+        'Content-Type': 'application/json',
+      }
+      const resolvedResource = resource || 'event'
+      const resolvedOperation = operation || 'create'
+      const resolvedCalendarId = encodeURIComponent(calendarId || 'primary')
+      const options = parseJsonConfig(config.options, {}) as Record<string, unknown>
+
+      if (resolvedResource === 'calendar') {
+        if (resolvedOperation === 'getMany') {
+          return requestJson('https://www.googleapis.com/calendar/v3/users/me/calendarList', { headers })
+        }
+
+        if (resolvedOperation === 'create') {
+          return requestJson('https://www.googleapis.com/calendar/v3/calendars', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ summary: config.summary || 'Untitled calendar', ...options }),
+          })
+        }
+
+        return unsupportedRealNode(`google-calendar:${resolvedResource}:${resolvedOperation}`)
+      }
+
+      if (resolvedOperation === 'create') {
+        return requestJson(`https://www.googleapis.com/calendar/v3/calendars/${resolvedCalendarId}/events`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(buildCalendarEvent(config)),
+        })
+      }
+
+      if (resolvedOperation === 'getMany') {
+        const params = new URLSearchParams()
+        Object.entries(options).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') params.set(key, String(value))
+        })
+        return requestJson(
+          `https://www.googleapis.com/calendar/v3/calendars/${resolvedCalendarId}/events?${params.toString()}`,
+          { headers }
+        )
+      }
+
+      if (resolvedOperation === 'availability') {
+        return requestJson('https://www.googleapis.com/calendar/v3/freeBusy', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            timeMin: config.start,
+            timeMax: config.end,
+            items: [{ id: calendarId || 'primary' }],
+            ...options,
+          }),
+        })
+      }
+
+      if (!eventId) throw new Error('Event ID is required for this Calendar operation')
+
+      if (resolvedOperation === 'get') {
+        return requestJson(
+          `https://www.googleapis.com/calendar/v3/calendars/${resolvedCalendarId}/events/${encodeURIComponent(eventId)}`,
+          { headers }
+        )
+      }
+
+      if (resolvedOperation === 'delete') {
+        return requestJson(
+          `https://www.googleapis.com/calendar/v3/calendars/${resolvedCalendarId}/events/${encodeURIComponent(eventId)}`,
+          { method: 'DELETE', headers }
+        )
+      }
+
+      if (resolvedOperation === 'update') {
+        return requestJson(
+          `https://www.googleapis.com/calendar/v3/calendars/${resolvedCalendarId}/events/${encodeURIComponent(eventId)}`,
+          {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify(buildCalendarEvent(config)),
+          }
+        )
+      }
+
+      return unsupportedRealNode(`google-calendar:${resolvedOperation}`)
+    }
+
     case 'airtable':
     case 'notion':
     case 'mysql':

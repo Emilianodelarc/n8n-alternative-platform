@@ -994,7 +994,7 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     category: 'action',
     icon: 'Mail',
     color: '#ea4335',
-    defaultConfig: { credentialId: '', resource: 'message', operation: 'send', to: '', subject: '', message: '', messageId: '', labels: '[]', attachments: '[]' },
+    defaultConfig: { credentialId: '', resource: 'message', operation: 'send', from: '', to: '', cc: '', bcc: '', subject: '', emailFormat: 'html', message: '', messageId: '', labels: '[]', attachments: '[]', options: '{"limit": 10}' },
     configSchema: [
       credentialField,
       {
@@ -1022,9 +1022,21 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
           { label: 'Add Label', value: 'addLabel' },
         ],
       },
-      { key: 'to', label: 'To', type: 'text' },
-      { key: 'subject', label: 'Subject', type: 'text' },
-      { key: 'message', label: 'Message', type: 'textarea' },
+      { key: 'from', label: 'From Email', type: 'text', placeholder: 'from@example.com' },
+      { key: 'to', label: 'To', type: 'text', placeholder: 'person@example.com' },
+      { key: 'cc', label: 'CC', type: 'text' },
+      { key: 'bcc', label: 'BCC', type: 'text' },
+      { key: 'subject', label: 'Subject', type: 'text', placeholder: 'Email subject' },
+      {
+        key: 'emailFormat',
+        label: 'Email Format',
+        type: 'select',
+        options: [
+          { label: 'HTML', value: 'html' },
+          { label: 'Text', value: 'text' },
+        ],
+      },
+      { key: 'message', label: 'Message', type: 'textarea', placeholder: 'Email content' },
       { key: 'messageId', label: 'Message ID', type: 'text' },
       { key: 'labels', label: 'Labels (JSON array)', type: 'json', placeholder: '["INBOX"]' },
       { key: 'attachments', label: 'Attachments (JSON)', type: 'json', placeholder: '[]' },
@@ -1040,7 +1052,7 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     category: 'action',
     icon: 'CalendarDays',
     color: '#4285f4',
-    defaultConfig: { credentialId: '', resource: 'event', operation: 'create', calendarId: 'primary', eventId: '', summary: '', start: '', end: '', attendees: '[]' },
+    defaultConfig: { credentialId: '', resource: 'event', operation: 'create', calendarId: 'primary', eventId: '', summary: '', description: '', location: '', start: '', end: '', attendees: '[]', options: '{"timeZone":"America/Argentina/Buenos_Aires"}' },
     configSchema: [
       credentialField,
       {
@@ -1068,6 +1080,8 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
       { key: 'calendarId', label: 'Calendar', type: 'text', placeholder: 'primary' },
       { key: 'eventId', label: 'Event ID', type: 'text' },
       { key: 'summary', label: 'Summary', type: 'text' },
+      { key: 'description', label: 'Description', type: 'textarea' },
+      { key: 'location', label: 'Location', type: 'text' },
       { key: 'start', label: 'Start', type: 'text', placeholder: '2026-05-02T10:00:00-03:00' },
       { key: 'end', label: 'End', type: 'text', placeholder: '2026-05-02T11:00:00-03:00' },
       { key: 'attendees', label: 'Attendees (JSON array)', type: 'json', placeholder: '["person@example.com"]' },
