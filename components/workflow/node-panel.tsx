@@ -299,8 +299,8 @@ export function NodePanel({ className }: NodePanelProps) {
         </Button>
       </div>
 
-      <Tabs defaultValue="config" className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="grid w-full grid-cols-3 mx-3 mt-2" style={{ width: 'calc(100% - 24px)' }}>
+      <Tabs defaultValue="config" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="grid w-full grid-cols-3 mx-3 mt-2 shrink-0" style={{ width: 'calc(100% - 24px)' }}>
           <TabsTrigger value="config" className="text-xs">
             <Settings className="w-3 h-3 mr-1" />
             Config
@@ -315,8 +315,9 @@ export function NodePanel({ className }: NodePanelProps) {
           </TabsTrigger>
         </TabsList>
 
-        <ScrollArea className="flex-1">
-          <TabsContent value="config" className="p-3 space-y-4 mt-0">
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <ScrollArea className="h-full">
+            <TabsContent value="config" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
             {/* Label */}
             <div className="space-y-2">
               <Label htmlFor="node-label" className="text-sm text-foreground">
@@ -358,7 +359,7 @@ export function NodePanel({ className }: NodePanelProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="output" className="p-3 space-y-4 mt-0">
+          <TabsContent value="output" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
             {nodeResult ? (
               <>
                 <div className={cn(
@@ -436,7 +437,7 @@ export function NodePanel({ className }: NodePanelProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="info" className="p-3 space-y-4 mt-0">
+          <TabsContent value="info" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
             <div className="space-y-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Node Type</Label>
@@ -492,7 +493,8 @@ export function NodePanel({ className }: NodePanelProps) {
               </div>
             </div>
           </TabsContent>
-        </ScrollArea>
+          </ScrollArea>
+        </div>
       </Tabs>
 
       {/* Footer */}
