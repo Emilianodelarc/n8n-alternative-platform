@@ -460,14 +460,14 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                     {tt(template.description)}
                   </p>
-                  <div className="mt-3 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+                  <div className="mt-3 flex min-w-0 flex-col gap-2">
                     <Badge variant="secondary" className="w-fit max-w-full truncate text-xs">
                       {t(categoryTranslationKeys[template.category])}
                     </Badge>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full shrink-0 px-3 min-[420px]:w-auto"
+                      className="h-auto min-h-8 w-full min-w-0 max-w-full whitespace-normal px-2 py-2 text-center leading-tight"
                       onClick={() => handleUseTemplate(template)}
                     >
                       {t('useTemplate')}
