@@ -88,6 +88,10 @@ export function CredentialsPanel() {
     }
   }
 
+  const handleConnectGoogle = () => {
+    window.location.href = `/api/oauth/google/start?next=${encodeURIComponent(window.location.pathname)}`
+  }
+
   const handleDelete = async (id: string) => {
     setError(null)
     try {
@@ -136,6 +140,18 @@ export function CredentialsPanel() {
                 </SelectContent>
               </Select>
             </div>
+
+            {service === 'google' && (
+              <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-2">
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Use Connect Google for the real OAuth flow. Manual tokens expire and are only useful for quick tests.
+                </p>
+                <Button type="button" className="mt-2 w-full" variant="secondary" onClick={handleConnectGoogle}>
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Connect Google
+                </Button>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">{t('credentialName')}</Label>
@@ -197,4 +213,3 @@ export function CredentialsPanel() {
     </div>
   )
 }
-

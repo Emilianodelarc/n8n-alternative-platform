@@ -223,6 +223,53 @@ function requireRealModeCredential(config: Record<string, unknown>, service: str
   return headers
 }
 
+async function refreshGoogleAccessToken(config: Record<string, unknown>, service: string) {
+  const refreshToken = typeof config.refreshToken === 'string' ? config.refreshToken.trim() : ''
+  if (!refreshToken) return null
+
+  const clientId = String(config.clientId || process.env.GOOGLE_CLIENT_ID || '')
+  const clientSecret = String(config.clientSecret || process.env.GOOGLE_CLIENT_SECRET || '')
+  if (!clientId || !clientSecret) {
+    throw new Error(`${service} needs GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to refresh OAuth tokens`)
+  }
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  })
+  const data = await response.json().catch(() => ({})) as Record<string, unknown>
+
+  if (!response.ok || typeof data.access_token !== 'string') {
+    throw new Error(`${service} could not refresh Google OAuth token: ${JSON.stringify(data)}`)
+  }
+
+  return data.access_token
+}
+
+async function getGoogleCredentialHeaders(config: Record<string, unknown>, service: string): Promise<Record<string, string>> {
+  const accessToken = typeof config.accessToken === 'string' ? config.accessToken.trim() : ''
+  if (accessToken.endsWith('.apps.googleusercontent.com')) {
+    throw new Error(`${service} needs an OAuth access token, not the Google OAuth Client ID. Use Connect Google or a token that starts with ya29...`)
+  }
+
+  const expiresAt = typeof config.expiresAt === 'string' ? Date.parse(config.expiresAt) : 0
+  const shouldRefresh = Boolean(config.refreshToken) && (!accessToken || !expiresAt || expiresAt < Date.now() + 60_000)
+  if (shouldRefresh) {
+    const refreshedAccessToken = await refreshGoogleAccessToken(config, service)
+    if (refreshedAccessToken) {
+      return { Authorization: `Bearer ${refreshedAccessToken}` }
+    }
+  }
+
+  return requireRealModeCredential(config, service)
+}
+
 function toBase64Url(value: string) {
   return Buffer.from(value, 'utf8')
     .toString('base64')
@@ -499,7 +546,7 @@ async function executeNode(
 
     case 'send-email': {
       const headers = {
-        ...requireRealModeCredential(config, 'Email Send'),
+        ...await getGoogleCredentialHeaders(config, 'Email Send'),
         'Content-Type': 'application/json',
       }
       const attachments = parseJsonConfig(config.attachments, []) as unknown[]
@@ -716,7 +763,7 @@ async function executeNode(
       }
 
       const headers = {
-        ...requireRealModeCredential(config, 'Google Sheets'),
+        ...await getGoogleCredentialHeaders(config, 'Google Sheets'),
         'Content-Type': 'application/json',
       }
 
@@ -778,7 +825,7 @@ async function executeNode(
       const resolvedFileId = fileReference?.id || fileId
 
       const headers = {
-        ...requireRealModeCredential(config, 'Google Drive'),
+        ...await getGoogleCredentialHeaders(config, 'Google Drive'),
         'Content-Type': 'application/json',
       }
 
@@ -870,7 +917,7 @@ async function executeNode(
       }
 
       const headers = {
-        ...requireRealModeCredential(config, 'Google Docs'),
+        ...await getGoogleCredentialHeaders(config, 'Google Docs'),
         'Content-Type': 'application/json',
       }
 
@@ -908,7 +955,7 @@ async function executeNode(
       }
 
       const headers = {
-        ...requireRealModeCredential(config, 'Google Slides'),
+        ...await getGoogleCredentialHeaders(config, 'Google Slides'),
         'Content-Type': 'application/json',
       }
 
@@ -942,7 +989,7 @@ async function executeNode(
         options?: string
       }
       const headers = {
-        ...requireRealModeCredential(config, 'Gmail'),
+        ...await getGoogleCredentialHeaders(config, 'Gmail'),
         'Content-Type': 'application/json',
       }
       const resolvedResource = resource || 'message'
@@ -1041,7 +1088,7 @@ async function executeNode(
         eventId?: string
       }
       const headers = {
-        ...requireRealModeCredential(config, 'Google Calendar'),
+        ...await getGoogleCredentialHeaders(config, 'Google Calendar'),
         'Content-Type': 'application/json',
       }
       const resolvedResource = resource || 'event'
