@@ -34,15 +34,30 @@ import {
   ChevronLeft,
   Pencil,
   Loader2,
+  Undo2,
+  Redo2,
+  LayoutTemplate,
 } from 'lucide-react'
 
 interface ToolbarProps {
   onExecute: () => void
   isExecuting: boolean
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
   className?: string
 }
 
-export function Toolbar({ onExecute, isExecuting, className }: ToolbarProps) {
+export function Toolbar({ 
+  onExecute, 
+  isExecuting, 
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  className 
+}: ToolbarProps) {
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const updateWorkflow = useWorkflowStore((s) => s.updateWorkflow)
   const duplicateWorkflow = useWorkflowStore((s) => s.duplicateWorkflow)
@@ -135,6 +150,30 @@ export function Toolbar({ onExecute, isExecuting, className }: ToolbarProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Undo/Redo buttons */}
+          <div className="flex items-center border-r border-border pr-2 mr-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onUndo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onRedo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Shift+Z)"
+            >
+              <Redo2 className="w-4 h-4" />
+            </Button>
+          </div>
+
           <Button
             onClick={onExecute}
             disabled={isExecuting || workflow.nodes.length === 0}

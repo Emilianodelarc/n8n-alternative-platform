@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution, NodeExecutionResult, ExecutionStatus } from './types'
+import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution, NodeExecutionResult, ExecutionStatus, GlobalVariable } from './types'
 import { v4 as uuid } from 'uuid'
 
 // Safe localStorage that works on both server and client
@@ -38,6 +38,19 @@ interface WorkflowState {
   
   // Editor state
   selectedNodeId: string | null
+  copiedNodes: WorkflowNode[] | null
+  
+  // Global variables
+  globalVariables: GlobalVariable[]
+  
+  // Debug mode
+  debugMode: boolean
+  debugBreakpoints: Set<string>
+  debugPausedAtNode: string | null
+  
+  // Undo/Redo
+  undoStack: Workflow[][]
+  redoStack: Workflow[][]
   
   // Execution
   currentExecution: WorkflowExecution | null
@@ -68,11 +81,35 @@ interface WorkflowState {
   completeExecution: (executionId: string, status: ExecutionStatus, error?: string) => void
   clearExecutionHistory: () => void
   
+  // Actions - Clipboard
+  copyNodes: (nodeIds: string[]) => void
+  pasteNodes: (position: { x: number; y: number }) => void
+  
+  // Actions - Global Variables
+  addGlobalVariable: (variable: Omit<GlobalVariable, 'id'>) => void
+  updateGlobalVariable: (id: string, updates: Partial<GlobalVariable>) => void
+  deleteGlobalVariable: (id: string) => void
+  
+  // Actions - Debug
+  setDebugMode: (enabled: boolean) => void
+  toggleBreakpoint: (nodeId: string) => void
+  setDebugPausedAtNode: (nodeId: string | null) => void
+  continueDebug: () => void
+  stepDebug: () => void
+  
+  // Actions - Undo/Redo
+  pushUndoState: () => void
+  undo: () => void
+  redo: () => void
+  canUndo: () => boolean
+  canRedo: () => boolean
+  
   // Helpers
   getActiveWorkflow: () => Workflow | null
   getNode: (nodeId: string) => WorkflowNode | undefined
   importWorkflow: (workflow: Workflow) => void
   exportWorkflow: (id: string) => Workflow | null
+  getGlobalVariables: () => GlobalVariable[]
 }
 
 // Example workflows for demo
@@ -261,6 +298,13 @@ export const useWorkflowStore = create<WorkflowState>()(
       workflows: createExampleWorkflows(),
       activeWorkflowId: null,
       selectedNodeId: null,
+      copiedNodes: null,
+      globalVariables: [],
+      debugMode: false,
+      debugBreakpoints: new Set<string>(),
+      debugPausedAtNode: null,
+      undoStack: [],
+      redoStack: [],
       currentExecution: null,
       executionHistory: [],
 
@@ -475,6 +519,119 @@ export const useWorkflowStore = create<WorkflowState>()(
         set({ executionHistory: [] })
       },
 
+      // Clipboard actions
+      copyNodes: (nodeIds) => {
+        const workflow = get().getActiveWorkflow()
+        if (!workflow) return
+        const nodes = workflow.nodes.filter((n) => nodeIds.includes(n.id))
+        set({ copiedNodes: nodes })
+      },
+
+      pasteNodes: (position) => {
+        const { copiedNodes } = get()
+        if (!copiedNodes || copiedNodes.length === 0) return
+        
+        const offsetX = position.x - copiedNodes[0].position.x
+        const offsetY = position.y - copiedNodes[0].position.y
+        
+        copiedNodes.forEach((node) => {
+          get().addNode({
+            type: node.type,
+            position: {
+              x: node.position.x + offsetX,
+              y: node.position.y + offsetY,
+            },
+            data: { ...node.data },
+          })
+        })
+      },
+
+      // Global Variables
+      addGlobalVariable: (variable) => {
+        const id = uuid()
+        set((state) => ({
+          globalVariables: [...state.globalVariables, { ...variable, id }],
+        }))
+      },
+
+      updateGlobalVariable: (id, updates) => {
+        set((state) => ({
+          globalVariables: state.globalVariables.map((v) =>
+            v.id === id ? { ...v, ...updates } : v
+          ),
+        }))
+      },
+
+      deleteGlobalVariable: (id) => {
+        set((state) => ({
+          globalVariables: state.globalVariables.filter((v) => v.id !== id),
+        }))
+      },
+
+      // Debug actions
+      setDebugMode: (enabled) => {
+        set({ debugMode: enabled, debugPausedAtNode: null })
+      },
+
+      toggleBreakpoint: (nodeId) => {
+        set((state) => {
+          const breakpoints = new Set(state.debugBreakpoints)
+          if (breakpoints.has(nodeId)) {
+            breakpoints.delete(nodeId)
+          } else {
+            breakpoints.add(nodeId)
+          }
+          return { debugBreakpoints: breakpoints }
+        })
+      },
+
+      setDebugPausedAtNode: (nodeId) => {
+        set({ debugPausedAtNode: nodeId })
+      },
+
+      continueDebug: () => {
+        set({ debugPausedAtNode: null })
+      },
+
+      stepDebug: () => {
+        // Will be handled by the execution engine
+        set({ debugPausedAtNode: null })
+      },
+
+      // Undo/Redo
+      pushUndoState: () => {
+        const { workflows, undoStack } = get()
+        set({
+          undoStack: [...undoStack.slice(-49), JSON.parse(JSON.stringify(workflows))],
+          redoStack: [],
+        })
+      },
+
+      undo: () => {
+        const { workflows, undoStack } = get()
+        if (undoStack.length === 0) return
+        const previous = undoStack[undoStack.length - 1]
+        set({
+          undoStack: undoStack.slice(0, -1),
+          redoStack: [...get().redoStack, JSON.parse(JSON.stringify(workflows))],
+          workflows: previous,
+        })
+      },
+
+      redo: () => {
+        const { workflows, redoStack } = get()
+        if (redoStack.length === 0) return
+        const next = redoStack[redoStack.length - 1]
+        set({
+          redoStack: redoStack.slice(0, -1),
+          undoStack: [...get().undoStack, JSON.parse(JSON.stringify(workflows))],
+          workflows: next,
+        })
+      },
+
+      canUndo: () => get().undoStack.length > 0,
+      canRedo: () => get().redoStack.length > 0,
+
       // Helpers
       getActiveWorkflow: () => {
         const state = get()
@@ -501,6 +658,10 @@ export const useWorkflowStore = create<WorkflowState>()(
       exportWorkflow: (id) => {
         return get().workflows.find((w) => w.id === id) || null
       },
+
+      getGlobalVariables: () => {
+        return get().globalVariables
+      },
     }),
     {
       name: 'workflow-storage',
@@ -508,6 +669,7 @@ export const useWorkflowStore = create<WorkflowState>()(
       partialize: (state) => ({
         workflows: state.workflows,
         executionHistory: state.executionHistory,
+        globalVariables: state.globalVariables,
       }),
       skipHydration: true,
     }

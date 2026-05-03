@@ -2,13 +2,20 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
+import { Variable, History, Bug, Undo2, Redo2 } from 'lucide-react'
 import { NodeLibrary } from './node-library'
 import { WorkflowCanvas } from './canvas'
 import { NodePanel } from './node-panel'
 import { Toolbar } from './toolbar'
 import { ExecutionPanel } from './execution-panel'
+import { VariablesPanel } from './variables-panel'
+import { DebugControls } from './debug-controls'
+import { ExecutionHistory } from './execution-history'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useWorkflowStore } from '@/lib/workflow/store'
 import { executeWorkflow } from '@/lib/workflow/engine'
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { cn } from '@/lib/utils'
 
 interface WorkflowEditorProps {
@@ -17,7 +24,11 @@ interface WorkflowEditorProps {
 
 export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   const [isExecuting, setIsExecuting] = useState(false)
+  const [rightPanelTab, setRightPanelTab] = useState<'config' | 'variables' | 'debug' | 'history'>('config')
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  
+  // Keyboard shortcuts (undo/redo, copy/paste, delete)
+  const { canUndo, canRedo, undo, redo } = useKeyboardShortcuts()
   const setActiveWorkflow = useWorkflowStore((s) => s.setActiveWorkflow)
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const startExecution = useWorkflowStore((s) => s.startExecution)
@@ -75,7 +86,14 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   return (
     <ReactFlowProvider>
       <div className="flex flex-col h-screen bg-background">
-        <Toolbar onExecute={handleExecute} isExecuting={isExecuting} />
+        <Toolbar 
+          onExecute={handleExecute} 
+          isExecuting={isExecuting}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={undo}
+          onRedo={redo}
+        />
         
         <div className="flex flex-1 overflow-hidden relative">
           {/* Left sidebar - Node Library */}
@@ -87,14 +105,44 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
             <ExecutionPanel />
           </div>
           
-          {/* Right sidebar - Node Panel */}
-          <div
-            className={cn(
-              'shrink-0 transition-all duration-200',
-              selectedNodeId ? 'w-80' : 'w-0'
-            )}
-          >
-            {selectedNodeId && <NodePanel className="w-80" />}
+          {/* Right sidebar - Panel with tabs */}
+          <div className="w-80 shrink-0 border-l border-border bg-card flex flex-col">
+            <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as typeof rightPanelTab)} className="flex flex-col h-full">
+              <TabsList className="grid w-full grid-cols-4 rounded-none border-b h-10">
+                <TabsTrigger value="config" className="text-xs rounded-none data-[state=active]:bg-background">
+                  Config
+                </TabsTrigger>
+                <TabsTrigger value="variables" className="text-xs rounded-none data-[state=active]:bg-background">
+                  <Variable className="w-3 h-3" />
+                </TabsTrigger>
+                <TabsTrigger value="debug" className="text-xs rounded-none data-[state=active]:bg-background">
+                  <Bug className="w-3 h-3" />
+                </TabsTrigger>
+                <TabsTrigger value="history" className="text-xs rounded-none data-[state=active]:bg-background">
+                  <History className="w-3 h-3" />
+                </TabsTrigger>
+              </TabsList>
+              <div className="flex-1 overflow-hidden">
+                <TabsContent value="config" className="h-full m-0 data-[state=inactive]:hidden">
+                  {selectedNodeId ? (
+                    <NodePanel className="h-full" />
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      Select a node to configure
+                    </div>
+                  )}
+                </TabsContent>
+                <TabsContent value="variables" className="h-full m-0 overflow-auto data-[state=inactive]:hidden">
+                  <VariablesPanel />
+                </TabsContent>
+                <TabsContent value="debug" className="h-full m-0 overflow-auto data-[state=inactive]:hidden">
+                  <DebugControls />
+                </TabsContent>
+                <TabsContent value="history" className="h-full m-0 overflow-auto data-[state=inactive]:hidden">
+                  <ExecutionHistory />
+                </TabsContent>
+              </div>
+            </Tabs>
           </div>
         </div>
       </div>

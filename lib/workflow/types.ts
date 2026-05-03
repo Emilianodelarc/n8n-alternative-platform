@@ -2,6 +2,15 @@
 
 export type NodeCategory = 'trigger' | 'action' | 'logic' | 'transform' | 'utility'
 
+// Global variables
+export interface GlobalVariable {
+  id: string
+  name: string
+  value: unknown
+  type: 'string' | 'number' | 'boolean' | 'json'
+  description?: string
+}
+
 export interface NodePosition {
   x: number
   y: number
@@ -405,6 +414,310 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     configSchema: [],
     inputs: [{ id: 'input', label: 'Input', type: 'any' }],
     outputs: [{ id: 'output', label: 'Output', type: 'any' }],
+  },
+
+  // AI Nodes
+  'openai': {
+    type: 'openai',
+    label: 'OpenAI',
+    description: 'Generate text with OpenAI GPT',
+    category: 'action',
+    icon: 'Brain',
+    color: '#10a37f',
+    defaultConfig: { 
+      model: 'gpt-4', 
+      prompt: '', 
+      systemPrompt: 'You are a helpful assistant.',
+      temperature: 0.7,
+      maxTokens: 1000
+    },
+    configSchema: [
+      { 
+        key: 'model', 
+        label: 'Model', 
+        type: 'select',
+        options: [
+          { label: 'GPT-4', value: 'gpt-4' },
+          { label: 'GPT-4 Turbo', value: 'gpt-4-turbo' },
+          { label: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' },
+        ],
+      },
+      { key: 'systemPrompt', label: 'System Prompt', type: 'textarea', placeholder: 'You are a helpful assistant.' },
+      { key: 'prompt', label: 'User Prompt', type: 'textarea', placeholder: 'Enter your prompt...', required: true },
+      { key: 'temperature', label: 'Temperature', type: 'number', defaultValue: 0.7 },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 1000 },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Response', type: 'string' }],
+  },
+  'anthropic': {
+    type: 'anthropic',
+    label: 'Claude AI',
+    description: 'Generate text with Anthropic Claude',
+    category: 'action',
+    icon: 'Sparkles',
+    color: '#d97706',
+    defaultConfig: { 
+      model: 'claude-3-opus', 
+      prompt: '',
+      systemPrompt: '',
+      maxTokens: 1000
+    },
+    configSchema: [
+      { 
+        key: 'model', 
+        label: 'Model', 
+        type: 'select',
+        options: [
+          { label: 'Claude 3 Opus', value: 'claude-3-opus' },
+          { label: 'Claude 3 Sonnet', value: 'claude-3-sonnet' },
+          { label: 'Claude 3 Haiku', value: 'claude-3-haiku' },
+        ],
+      },
+      { key: 'systemPrompt', label: 'System Prompt', type: 'textarea' },
+      { key: 'prompt', label: 'User Prompt', type: 'textarea', required: true },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 1000 },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Response', type: 'string' }],
+  },
+
+  // Database Nodes
+  'postgres-query': {
+    type: 'postgres-query',
+    label: 'PostgreSQL',
+    description: 'Execute PostgreSQL queries',
+    category: 'action',
+    icon: 'Database',
+    color: '#336791',
+    defaultConfig: { connectionString: '', query: '', parameters: '[]' },
+    configSchema: [
+      { key: 'connectionString', label: 'Connection String', type: 'text', placeholder: 'postgresql://user:pass@host:5432/db', required: true },
+      { key: 'query', label: 'SQL Query', type: 'code', placeholder: 'SELECT * FROM users WHERE id = $1', required: true },
+      { key: 'parameters', label: 'Parameters (JSON array)', type: 'json', placeholder: '[1, "value"]' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Rows', type: 'array' }],
+  },
+  'mongodb': {
+    type: 'mongodb',
+    label: 'MongoDB',
+    description: 'Query MongoDB collections',
+    category: 'action',
+    icon: 'Database',
+    color: '#47a248',
+    defaultConfig: { connectionString: '', collection: '', operation: 'find', query: '{}' },
+    configSchema: [
+      { key: 'connectionString', label: 'Connection String', type: 'text', required: true },
+      { key: 'collection', label: 'Collection', type: 'text', required: true },
+      { 
+        key: 'operation', 
+        label: 'Operation', 
+        type: 'select',
+        options: [
+          { label: 'Find', value: 'find' },
+          { label: 'Find One', value: 'findOne' },
+          { label: 'Insert', value: 'insert' },
+          { label: 'Update', value: 'update' },
+          { label: 'Delete', value: 'delete' },
+        ],
+      },
+      { key: 'query', label: 'Query (JSON)', type: 'json', placeholder: '{"field": "value"}' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
+  },
+  'redis': {
+    type: 'redis',
+    label: 'Redis',
+    description: 'Redis operations',
+    category: 'action',
+    icon: 'Database',
+    color: '#dc382d',
+    defaultConfig: { connectionString: '', operation: 'get', key: '', value: '' },
+    configSchema: [
+      { key: 'connectionString', label: 'Connection String', type: 'text', required: true },
+      { 
+        key: 'operation', 
+        label: 'Operation', 
+        type: 'select',
+        options: [
+          { label: 'GET', value: 'get' },
+          { label: 'SET', value: 'set' },
+          { label: 'DEL', value: 'del' },
+          { label: 'HGET', value: 'hget' },
+          { label: 'HSET', value: 'hset' },
+        ],
+      },
+      { key: 'key', label: 'Key', type: 'text', required: true },
+      { key: 'value', label: 'Value', type: 'textarea' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
+  },
+
+  // Messaging Nodes
+  'discord': {
+    type: 'discord',
+    label: 'Discord',
+    description: 'Send Discord messages',
+    category: 'action',
+    icon: 'MessageCircle',
+    color: '#5865f2',
+    defaultConfig: { webhookUrl: '', content: '', username: '', avatarUrl: '' },
+    configSchema: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'text', required: true },
+      { key: 'content', label: 'Message Content', type: 'textarea', required: true },
+      { key: 'username', label: 'Username (optional)', type: 'text' },
+      { key: 'avatarUrl', label: 'Avatar URL (optional)', type: 'text' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
+  },
+  'telegram': {
+    type: 'telegram',
+    label: 'Telegram',
+    description: 'Send Telegram messages',
+    category: 'action',
+    icon: 'Send',
+    color: '#0088cc',
+    defaultConfig: { botToken: '', chatId: '', message: '', parseMode: 'HTML' },
+    configSchema: [
+      { key: 'botToken', label: 'Bot Token', type: 'text', required: true },
+      { key: 'chatId', label: 'Chat ID', type: 'text', required: true },
+      { key: 'message', label: 'Message', type: 'textarea', required: true },
+      { 
+        key: 'parseMode', 
+        label: 'Parse Mode', 
+        type: 'select',
+        options: [
+          { label: 'HTML', value: 'HTML' },
+          { label: 'Markdown', value: 'Markdown' },
+          { label: 'Plain Text', value: '' },
+        ],
+      },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
+  },
+  'whatsapp': {
+    type: 'whatsapp',
+    label: 'WhatsApp',
+    description: 'Send WhatsApp messages (via API)',
+    category: 'action',
+    icon: 'Phone',
+    color: '#25d366',
+    defaultConfig: { apiKey: '', phoneNumber: '', message: '' },
+    configSchema: [
+      { key: 'apiKey', label: 'API Key', type: 'text', required: true },
+      { key: 'phoneNumber', label: 'Phone Number', type: 'text', placeholder: '+1234567890', required: true },
+      { key: 'message', label: 'Message', type: 'textarea', required: true },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
+  },
+
+  // Google Services
+  'google-sheets': {
+    type: 'google-sheets',
+    label: 'Google Sheets',
+    description: 'Read/write Google Sheets',
+    category: 'action',
+    icon: 'Table',
+    color: '#34a853',
+    defaultConfig: { spreadsheetId: '', range: '', operation: 'read', values: '[]' },
+    configSchema: [
+      { key: 'spreadsheetId', label: 'Spreadsheet ID', type: 'text', required: true },
+      { key: 'range', label: 'Range (e.g., Sheet1!A1:D10)', type: 'text', required: true },
+      { 
+        key: 'operation', 
+        label: 'Operation', 
+        type: 'select',
+        options: [
+          { label: 'Read', value: 'read' },
+          { label: 'Write', value: 'write' },
+          { label: 'Append', value: 'append' },
+        ],
+      },
+      { key: 'values', label: 'Values (JSON, for write)', type: 'json', placeholder: '[["A", "B"], ["C", "D"]]' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Data', type: 'any' }],
+  },
+  'google-drive': {
+    type: 'google-drive',
+    label: 'Google Drive',
+    description: 'Interact with Google Drive',
+    category: 'action',
+    icon: 'HardDrive',
+    color: '#4285f4',
+    defaultConfig: { operation: 'list', folderId: '', fileName: '' },
+    configSchema: [
+      { 
+        key: 'operation', 
+        label: 'Operation', 
+        type: 'select',
+        options: [
+          { label: 'List Files', value: 'list' },
+          { label: 'Upload File', value: 'upload' },
+          { label: 'Download File', value: 'download' },
+          { label: 'Delete File', value: 'delete' },
+        ],
+      },
+      { key: 'folderId', label: 'Folder ID', type: 'text' },
+      { key: 'fileName', label: 'File Name', type: 'text' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
+  },
+
+  // File & Data
+  'csv-parse': {
+    type: 'csv-parse',
+    label: 'Parse CSV',
+    description: 'Parse CSV data',
+    category: 'transform',
+    icon: 'FileSpreadsheet',
+    color: '#8b5cf6',
+    defaultConfig: { delimiter: ',', hasHeaders: true },
+    configSchema: [
+      { key: 'delimiter', label: 'Delimiter', type: 'text', defaultValue: ',' },
+      { key: 'hasHeaders', label: 'Has Headers', type: 'boolean', defaultValue: true },
+    ],
+    inputs: [{ id: 'input', label: 'CSV String', type: 'string' }],
+    outputs: [{ id: 'output', label: 'Data', type: 'array' }],
+  },
+  'json-parse': {
+    type: 'json-parse',
+    label: 'Parse JSON',
+    description: 'Parse JSON string',
+    category: 'transform',
+    icon: 'Braces',
+    color: '#8b5cf6',
+    defaultConfig: { path: '' },
+    configSchema: [
+      { key: 'path', label: 'JSON Path (optional)', type: 'text', placeholder: 'data.items' },
+    ],
+    inputs: [{ id: 'input', label: 'JSON String', type: 'string' }],
+    outputs: [{ id: 'output', label: 'Object', type: 'any' }],
+  },
+
+  // Notification
+  'push-notification': {
+    type: 'push-notification',
+    label: 'Push Notification',
+    description: 'Send push notifications',
+    category: 'action',
+    icon: 'Bell',
+    color: '#f97316',
+    defaultConfig: { title: '', body: '', url: '' },
+    configSchema: [
+      { key: 'title', label: 'Title', type: 'text', required: true },
+      { key: 'body', label: 'Body', type: 'textarea', required: true },
+      { key: 'url', label: 'Click URL (optional)', type: 'text' },
+    ],
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'output', label: 'Result', type: 'any' }],
   },
 }
 

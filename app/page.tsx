@@ -29,7 +29,9 @@ import {
   Copy,
   Trash2,
   Zap,
+  LayoutTemplate,
 } from 'lucide-react'
+import { TemplatesGallery } from '@/components/workflow/templates-gallery'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +48,7 @@ export default function DashboardPage() {
 
   const [search, setSearch] = useState('')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [isTemplatesDialogOpen, setIsTemplatesDialogOpen] = useState(false)
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
   const [mounted, setMounted] = useState(false)
@@ -112,14 +115,33 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Workflow
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
+            <div className="flex items-center gap-2">
+              <Dialog open={isTemplatesDialogOpen} onOpenChange={setIsTemplatesDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <LayoutTemplate className="w-4 h-4 mr-2" />
+                    Templates
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>Workflow Templates</DialogTitle>
+                    <DialogDescription>
+                      Start with a pre-built workflow template and customize it.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <TemplatesGallery onClose={() => setIsTemplatesDialogOpen(false)} />
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Workflow
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Create New Workflow</DialogTitle>
                   <DialogDescription>
@@ -157,6 +179,7 @@ export default function DashboardPage() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
         </div>
       </header>
