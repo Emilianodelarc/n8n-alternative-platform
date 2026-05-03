@@ -439,7 +439,7 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
       </div>
 
       <ScrollArea className="h-[min(62vh,520px)]">
-        <div className="grid grid-cols-1 gap-3 pr-3 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 pr-3 xl:grid-cols-2">
           {filteredTemplates.map((template) => (
             <div
               key={template.id}
@@ -456,21 +456,21 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-medium truncate">{tt(template.name)}</h4>
+                  <h4 className="truncate font-medium">{tt(template.name)}</h4>
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                     {tt(template.description)}
                   </p>
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-3 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
                     <Badge variant="secondary" className="w-fit max-w-full truncate text-xs">
                       {t(categoryTranslationKeys[template.category])}
                     </Badge>
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full shrink-0 sm:w-auto"
+                      className="w-full shrink-0 px-3 min-[420px]:w-auto"
                       onClick={() => handleUseTemplate(template)}
                     >
-                      <span className="truncate">{t('useTemplate')}</span>
+                      {t('useTemplate')}
                     </Button>
                   </div>
                 </div>
