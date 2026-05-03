@@ -14,6 +14,7 @@ import {
   type Node,
   type ReactFlowInstance,
   BackgroundVariant,
+  type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useWorkflowStore } from '@/lib/workflow/store'
@@ -48,7 +49,6 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowFlowNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
-  // Sync store changes to local state
   useEffect(() => {
     if (isDraggingNode.current) return
 
@@ -92,6 +92,13 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
     )
   }, [workflow, selectedNodeId, setNodes, setEdges])
 
+  const onNodesChangeHandler = useCallback(
+    (changes: NodeChange<WorkflowFlowNode>[]) => {
+      onNodesChange(changes)
+    },
+    [onNodesChange]
+  )
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source && connection.target) {
@@ -131,6 +138,10 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
     [deleteEdge]
   )
 
+  const onNodeDragStart = useCallback(() => {
+    isDraggingNode.current = true
+  }, [])
+
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
       isDraggingNode.current = false
@@ -138,10 +149,6 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
     },
     [updateNode]
   )
-
-  const onNodeDragStart = useCallback(() => {
-    isDraggingNode.current = true
-  }, [])
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
@@ -153,9 +160,14 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       event.preventDefault()
 
       const data = event.dataTransfer.getData('application/reactflow')
-      if (!data || !reactFlowInstance.current || !reactFlowWrapper.current) return
+      if (!data || !reactFlowInstance.current) return
 
-      const { type, label, category } = JSON.parse(data) as { type: string; label: string; category: NodeCategory }
+      const { type, label, category } = JSON.parse(data) as {
+        type: string
+        label: string
+        category: NodeCategory
+      }
+
       const nodeTypeDef = NODE_TYPES[type]
       if (!nodeTypeDef) return
 
@@ -183,7 +195,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
 
   if (!workflow) {
     return (
-      <div className={cn('flex items-center justify-center h-full bg-background', className)}>
+      <div className={cn('flex h-full items-center justify-center bg-background', className)}>
         <p className="text-muted-foreground">{t('noWorkflowSelected')}</p>
       </div>
     )
@@ -194,7 +206,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={onNodesChangeHandler}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
@@ -209,10 +221,11 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         nodeTypes={nodeTypes}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         fitView={false}
-        minZoom={0.35}
-        maxZoom={1.5}
+        minZoom={1}
+        maxZoom={1}
         zoomOnScroll={false}
         zoomOnPinch={false}
+        zoomOnDoubleClick={false}
         panOnScroll={false}
         panOnDrag={false}
         preventScrolling={true}
@@ -228,13 +241,14 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
           size={1}
           color="var(--canvas-dot)"
         />
-        <Controls
-          className="!rounded-md !border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!text-foreground [&_button:hover]:!bg-accent"
-        />
+
+        <Controls className="!rounded-md !border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!text-foreground [&_button:hover]:!bg-accent" />
+
         <MiniMap
           className="!hidden !rounded-md !border-border !bg-card lg:!block"
           nodeColor={(node) => {
             const category = (node.data as { category?: NodeCategory })?.category
+
             switch (category) {
               case 'trigger':
                 return '#22c55e'
