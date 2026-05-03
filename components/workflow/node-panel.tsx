@@ -247,6 +247,8 @@ export function NodePanel({ className }: NodePanelProps) {
   const [localConfig, setLocalConfig] = useState<Record<string, unknown>>({})
   const [copied, setCopied] = useState(false)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
+  const [isDraggingExpression, setIsDraggingExpression] = useState(false)
+  const [dragTargetField, setDragTargetField] = useState<string | null>(null)
 
   useEffect(() => {
     if (node?.data.config) {
@@ -318,8 +320,38 @@ export function NodePanel({ className }: NodePanelProps) {
     if (!expression.includes('{{')) return
 
     event.preventDefault()
+    setDragTargetField(null)
     insertExpressionIntoField(field, event.currentTarget, expression)
   }, [insertExpressionIntoField])
+
+  const handleExpressionDragOver = useCallback((
+    event: React.DragEvent<HTMLInputElement | HTMLTextAreaElement>,
+    field: ConfigField
+  ) => {
+    if (!event.dataTransfer.types.includes('text/plain')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setDragTargetField(field.key)
+  }, [])
+
+  const clearDragTarget = useCallback(() => {
+    setDragTargetField(null)
+  }, [])
+
+  const droppableFieldClass = (field: ConfigField, hasError: boolean) =>
+    cn(
+      'transition-colors',
+      hasError && 'border-destructive',
+      isDraggingExpression && !hasError && 'border-violet-500/50',
+      dragTargetField === field.key && 'border-violet-500 bg-violet-500/10 ring-2 ring-violet-500/30'
+    )
+
+  const dropHint = (field: ConfigField) =>
+    dragTargetField === field.key ? (
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md border border-violet-500 bg-violet-500/15 text-xs font-medium text-violet-700 backdrop-blur-[1px] dark:text-violet-200">
+        Soltar variable aqui
+      </div>
+    ) : null
 
   const handleLabelChange = useCallback((label: string) => {
     updateNodeData(selectedNodeId!, { label })
@@ -371,16 +403,20 @@ export function NodePanel({ className }: NodePanelProps) {
       case 'password':
         return (
           <div className="space-y-1">
-            <Input
-              id={field.key}
-              type={field.type === 'password' ? 'password' : 'text'}
-              value={value as string}
-              onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleExpressionDrop(e, field)}
-              placeholder={placeholder}
-              className={cn('bg-input border-border', error && 'border-destructive')}
-            />
+            <div className="relative">
+              <Input
+                id={field.key}
+                type={field.type === 'password' ? 'password' : 'text'}
+                value={value as string}
+                onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
+                onDragOver={(e) => handleExpressionDragOver(e, field)}
+                onDragLeave={clearDragTarget}
+                onDrop={(e) => handleExpressionDrop(e, field)}
+                placeholder={placeholder}
+                className={cn('border-border bg-input', droppableFieldClass(field, Boolean(error)))}
+              />
+              {dropHint(field)}
+            </div>
             {error && (
               <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
@@ -393,15 +429,19 @@ export function NodePanel({ className }: NodePanelProps) {
       case 'textarea':
         return (
           <div className="space-y-1">
-            <Textarea
-              id={field.key}
-              value={value as string}
-              onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => handleExpressionDrop(e, field)}
-              placeholder={placeholder}
-              className={cn('min-h-[80px] bg-input border-border resize-y', error && 'border-destructive')}
-            />
+            <div className="relative">
+              <Textarea
+                id={field.key}
+                value={value as string}
+                onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
+                onDragOver={(e) => handleExpressionDragOver(e, field)}
+                onDragLeave={clearDragTarget}
+                onDrop={(e) => handleExpressionDrop(e, field)}
+                placeholder={placeholder}
+                className={cn('min-h-[80px] resize-y border-border bg-input', droppableFieldClass(field, Boolean(error)))}
+              />
+              {dropHint(field)}
+            </div>
             {error && (
               <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
@@ -419,14 +459,16 @@ export function NodePanel({ className }: NodePanelProps) {
                 id={field.key}
                 value={value as string}
                 onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
-                onDragOver={(e) => e.preventDefault()}
+                onDragOver={(e) => handleExpressionDragOver(e, field)}
+                onDragLeave={clearDragTarget}
                 onDrop={(e) => handleExpressionDrop(e, field)}
                 placeholder={placeholder}
                 className={cn(
-                  'min-h-[100px] font-mono text-sm bg-input border-border resize-y',
-                  error && 'border-destructive'
+                  'min-h-[100px] resize-y border-border bg-input font-mono text-sm',
+                  droppableFieldClass(field, Boolean(error))
                 )}
               />
+              {dropHint(field)}
               <Badge variant="outline" className="absolute top-2 right-2 text-[10px] opacity-60">
                 JSON
               </Badge>
@@ -454,15 +496,17 @@ export function NodePanel({ className }: NodePanelProps) {
                 id={field.key}
                 value={displayCode}
                 onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
-                onDragOver={(e) => e.preventDefault()}
+                onDragOver={(e) => handleExpressionDragOver(e, field)}
+                onDragLeave={clearDragTarget}
                 onDrop={(e) => handleExpressionDrop(e, field)}
                 placeholder={placeholder || t('codePlaceholder')}
                 className={cn(
-                  'min-h-[150px] font-mono text-sm bg-zinc-900 border-border resize-y',
+                  'min-h-[150px] resize-y border-border bg-zinc-900 font-mono text-sm',
                   'text-green-400',
-                  error && 'border-destructive'
+                  droppableFieldClass(field, Boolean(error))
                 )}
               />
+              {dropHint(field)}
               <Badge variant="outline" className="absolute top-2 right-2 text-[10px] opacity-60 border-amber-500/50 text-amber-400">
                 <Code className="w-3 h-3 mr-1" />
                 JS
@@ -584,6 +628,12 @@ export function NodePanel({ className }: NodePanelProps) {
   const startExpressionDrag = (event: React.DragEvent, expression: string) => {
     event.dataTransfer.setData('text/plain', expression)
     event.dataTransfer.effectAllowed = 'copy'
+    setIsDraggingExpression(true)
+  }
+
+  const endExpressionDrag = () => {
+    setIsDraggingExpression(false)
+    setDragTargetField(null)
   }
 
   return (
@@ -710,6 +760,7 @@ export function NodePanel({ className }: NodePanelProps) {
                         className="inline-flex max-w-full cursor-grab items-center gap-1.5 rounded border border-violet-500/30 bg-background px-2 py-1.5 text-left shadow-sm transition-colors hover:border-violet-500/60 hover:bg-violet-500/10 active:cursor-grabbing"
                         onClick={() => copyExpression(suggestion.expression)}
                         onDragStart={(event) => startExpressionDrag(event, suggestion.expression)}
+                        onDragEnd={endExpressionDrag}
                         title={suggestion.expression}
                       >
                         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
