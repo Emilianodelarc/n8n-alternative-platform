@@ -302,12 +302,31 @@ function toBase64Url(value: string) {
 }
 
 function normalizeEmailList(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean)
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean)
   if (typeof value !== 'string') return []
+  const trimmed = value.trim()
+  if (trimmed.startsWith('[')) {
+    const parsed = parseJsonConfig(trimmed, null)
+    if (Array.isArray(parsed)) return normalizeEmailList(parsed)
+  }
   return value
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function validateEmailHeader(name: string, addresses: string[]) {
+  const invalid = addresses.filter((address) =>
+    address.includes('{{') ||
+    address.includes('}}') ||
+    address.startsWith('{') ||
+    address.startsWith('[') ||
+    !/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(address)
+  )
+
+  if (invalid.length > 0) {
+    throw new Error(`${name} must contain valid email addresses separated by commas. Invalid value: ${invalid.join(', ')}`)
+  }
 }
 
 function parseStringArray(value: unknown): string[] {
@@ -327,6 +346,10 @@ function buildEmailRaw(config: Record<string, unknown>) {
 
   if (to.length === 0) throw new Error('Email recipient is required')
   if (!subject) throw new Error('Email subject is required')
+  validateEmailHeader('To', to)
+  validateEmailHeader('CC', cc)
+  validateEmailHeader('BCC', bcc)
+  if (from) validateEmailHeader('From Email', [from])
 
   const headers = [
     from ? `From: ${from}` : '',
