@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useWorkflowStore } from '@/lib/workflow/store'
 import type { Workflow } from '@/lib/workflow/types'
+import { useI18n } from '@/lib/i18n'
 
 interface WorkflowTemplate {
   id: string
@@ -336,14 +337,35 @@ const TEMPLATES: WorkflowTemplate[] = [
 ]
 
 const CATEGORIES = ['All', 'Marketing', 'Notifications', 'AI', 'Data', 'Sales', 'Reporting']
+const categoryTranslationKeys: Record<string, 'all' | 'marketing' | 'notifications' | 'ai' | 'data' | 'sales' | 'reporting'> = {
+  All: 'all',
+  Marketing: 'marketing',
+  Notifications: 'notifications',
+  AI: 'ai',
+  Data: 'data',
+  Sales: 'sales',
+  Reporting: 'reporting',
+}
 
 interface TemplatesGalleryProps {
   onClose?: () => void
 }
 
 export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
+  const { t, tt } = useI18n()
   const [selectedCategory, setSelectedCategory] = useState('All')
   const importWorkflow = useWorkflowStore((s) => s.importWorkflow)
+
+  const translateValue = (value: unknown): unknown => {
+    if (typeof value === 'string') return tt(value)
+    if (Array.isArray(value)) return value.map(translateValue)
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, translateValue(item)])
+      )
+    }
+    return value
+  }
 
   const filteredTemplates = selectedCategory === 'All'
     ? TEMPLATES
@@ -353,6 +375,17 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
     const workflow: Workflow = {
       ...template.workflow,
       id: crypto.randomUUID(),
+      name: tt(template.workflow.name),
+      description: template.workflow.description ? tt(template.workflow.description) : undefined,
+      nodes: template.workflow.nodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          label: tt(node.data.label),
+          description: node.data.description ? tt(node.data.description) : undefined,
+          config: translateValue(node.data.config) as Record<string, unknown>,
+        },
+      })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -370,7 +403,7 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
             size="sm"
             onClick={() => setSelectedCategory(category)}
           >
-            {category}
+            {t(categoryTranslationKeys[category])}
           </Button>
         ))}
       </div>
@@ -393,20 +426,20 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-medium truncate">{template.name}</h4>
+                  <h4 className="font-medium truncate">{tt(template.name)}</h4>
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                    {template.description}
+                    {tt(template.description)}
                   </p>
                   <div className="flex items-center justify-between mt-3">
                     <Badge variant="secondary" className="text-xs">
-                      {template.category}
+                      {t(categoryTranslationKeys[template.category])}
                     </Badge>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => handleUseTemplate(template)}
                     >
-                      Use Template
+                      {t('useTemplate')}
                     </Button>
                   </div>
                 </div>

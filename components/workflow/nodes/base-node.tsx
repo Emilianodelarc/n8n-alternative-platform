@@ -5,6 +5,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { cn } from '@/lib/utils'
 import { NODE_TYPES, type NodeCategory } from '@/lib/workflow/types'
 import { useWorkflowStore } from '@/lib/workflow/store'
+import { useI18n } from '@/lib/i18n'
 import {
   Play,
   Webhook,
@@ -23,6 +24,29 @@ import {
   Split,
   Timer,
   Circle,
+  Bell,
+  BookOpen,
+  Brain,
+  Braces,
+  CalendarDays,
+  CreditCard,
+  Database,
+  FileCode2,
+  FileSpreadsheet,
+  FileText,
+  Github,
+  HardDrive,
+  ListFilter,
+  MessageCircle,
+  OctagonX,
+  Phone,
+  Presentation,
+  Reply,
+  Route,
+  Send,
+  Sparkles,
+  Table,
+  Table2,
 } from 'lucide-react'
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -43,6 +67,29 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Split,
   Timer,
   Circle,
+  Bell,
+  BookOpen,
+  Brain,
+  Braces,
+  CalendarDays,
+  CreditCard,
+  Database,
+  FileCode2,
+  FileSpreadsheet,
+  FileText,
+  Github,
+  HardDrive,
+  ListFilter,
+  MessageCircle,
+  OctagonX,
+  Phone,
+  Presentation,
+  Reply,
+  Route,
+  Send,
+  Sparkles,
+  Table,
+  Table2,
 }
 
 const categoryColors: Record<NodeCategory, string> = {
@@ -77,7 +124,8 @@ interface BaseNodeData {
 }
 
 function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
-  const nodeData = data as BaseNodeData
+  const { t, tt } = useI18n()
+  const nodeData = data as unknown as BaseNodeData
   const nodeType = NODE_TYPES[type as string]
   const currentExecution = useWorkflowStore((s) => s.currentExecution)
   const nodeResult = currentExecution?.nodeResults[id]
@@ -91,6 +139,12 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
   
   const inputs = nodeType?.inputs || []
   const outputs = nodeType?.outputs || []
+  const getOutputLabel = (output: { id: string; label: string }) => {
+    if (output.id === 'route1' && typeof nodeData.config.route1Label === 'string') return tt(nodeData.config.route1Label)
+    if (output.id === 'route2' && typeof nodeData.config.route2Label === 'string') return tt(nodeData.config.route2Label)
+    if (output.id === 'route3' && typeof nodeData.config.route3Label === 'string') return tt(nodeData.config.route3Label)
+    return tt(output.label)
+  }
 
   return (
     <div
@@ -126,11 +180,11 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
-              {nodeData.label || nodeType?.label}
+              {tt(nodeData.label || nodeType?.label || '')}
             </p>
             {nodeType?.description && (
               <p className="text-xs text-muted-foreground truncate">
-                {nodeType.description}
+                {tt(nodeType.description)}
               </p>
             )}
           </div>
@@ -144,9 +198,9 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
             isSuccess && 'bg-green-500/20 text-green-400',
             isError && 'bg-red-500/20 text-red-400'
           )}>
-            {isRunning && 'Running...'}
-            {isSuccess && `Done (${nodeResult.duration}ms)`}
-            {isError && 'Error'}
+            {isRunning && t('running')}
+            {isSuccess && `${tt('Done')} (${nodeResult.duration}ms)`}
+            {isError && t('error')}
           </div>
         )}
       </div>
@@ -169,8 +223,8 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
       {outputs.length > 1 && (
         <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-around pr-6 pointer-events-none">
           {outputs.map((output) => (
-            <span key={output.id} className="text-[10px] text-muted-foreground">
-              {output.label}
+            <span key={output.id} className="max-w-20 truncate text-[10px] text-muted-foreground">
+              {getOutputLabel(output)}
             </span>
           ))}
         </div>

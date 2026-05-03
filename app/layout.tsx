@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ResizeObserverFix } from '@/components/resize-observer-fix'
+import { ThemeProvider } from '@/components/theme-provider'
+import { I18nProvider } from '@/lib/i18n'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -36,11 +38,21 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark bg-background">
+    <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased bg-background text-foreground">
-        <ResizeObserverFix />
-        {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          storageKey="flowcraft-theme"
+          disableTransitionOnChange
+        >
+          <I18nProvider>
+            <ResizeObserverFix />
+            {children}
+            {process.env.NODE_ENV === 'production' && <Analytics />}
+          </I18nProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -20,18 +20,20 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { useWorkflowStore } from '@/lib/workflow/store'
+import { useI18n } from '@/lib/i18n'
 import type { WorkflowExecution, ExecutionStatus } from '@/lib/workflow/types'
 import { cn } from '@/lib/utils'
 
-const statusConfig: Record<ExecutionStatus, { icon: React.ElementType; color: string; label: string }> = {
-  pending: { icon: Clock, color: 'text-muted-foreground', label: 'Pending' },
-  running: { icon: Play, color: 'text-blue-500', label: 'Running' },
-  success: { icon: CheckCircle, color: 'text-green-500', label: 'Success' },
-  error: { icon: XCircle, color: 'text-red-500', label: 'Error' },
-  skipped: { icon: Clock, color: 'text-muted-foreground', label: 'Skipped' },
+const statusConfig: Record<ExecutionStatus, { icon: React.ElementType; color: string }> = {
+  pending: { icon: Clock, color: 'text-muted-foreground' },
+  running: { icon: Play, color: 'text-blue-500' },
+  success: { icon: CheckCircle, color: 'text-green-500' },
+  error: { icon: XCircle, color: 'text-red-500' },
+  skipped: { icon: Clock, color: 'text-muted-foreground' },
 }
 
 function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
+  const { t, tt } = useI18n()
   const [isOpen, setIsOpen] = useState(false)
   const workflows = useWorkflowStore((s) => s.workflows)
   
@@ -54,10 +56,10 @@ function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-medium truncate text-sm">
-                  {workflow?.name || 'Unknown Workflow'}
+                  {workflow?.name ? tt(workflow.name) : t('unknownWorkflow')}
                 </span>
                 <Badge variant="outline" className={cn('text-xs', config.color)}>
-                  {config.label}
+                  {t(execution.status)}
                 </Badge>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
@@ -92,7 +94,7 @@ function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
                     className="flex items-center gap-2 p-2 rounded bg-muted/50 text-xs"
                   >
                     <NodeIcon className={cn('w-3 h-3', nodeConfig.color)} />
-                    <span className="font-medium">{node?.data.label || nodeId}</span>
+                    <span className="font-medium">{node?.data.label ? tt(node.data.label) : nodeId}</span>
                     {result.duration && (
                       <span className="text-muted-foreground">{result.duration}ms</span>
                     )}
@@ -111,6 +113,7 @@ function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
 }
 
 export function ExecutionHistory() {
+  const { t } = useI18n()
   const executionHistory = useWorkflowStore((s) => s.executionHistory)
   const clearExecutionHistory = useWorkflowStore((s) => s.clearExecutionHistory)
 
@@ -125,7 +128,7 @@ export function ExecutionHistory() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <History className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold">Execution History</h3>
+          <h3 className="font-semibold">{t('executionHistory')}</h3>
         </div>
         {executionHistory.length > 0 && (
           <Button
@@ -135,7 +138,7 @@ export function ExecutionHistory() {
             onClick={clearExecutionHistory}
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            Clear
+            {t('clear')}
           </Button>
         )}
       </div>
@@ -143,7 +146,7 @@ export function ExecutionHistory() {
       {executionHistory.length > 0 && (
         <div className="flex gap-4 text-xs">
           <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">Total:</span>
+            <span className="text-muted-foreground">{t('total')}</span>
             <span className="font-medium">{stats.total}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -161,8 +164,8 @@ export function ExecutionHistory() {
         {executionHistory.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No executions yet</p>
-            <p className="text-xs">Run a workflow to see history</p>
+            <p className="text-sm">{t('noExecutionsYet')}</p>
+            <p className="text-xs">{t('runWorkflowHistory')}</p>
           </div>
         ) : (
           <div className="space-y-2 pr-4">

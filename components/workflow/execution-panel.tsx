@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { useWorkflowStore } from '@/lib/workflow/store'
+import { useI18n } from '@/lib/i18n'
 import { ChevronUp, ChevronDown, X, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
 
 interface ExecutionPanelProps {
@@ -12,6 +13,7 @@ interface ExecutionPanelProps {
 }
 
 export function ExecutionPanel({ className }: ExecutionPanelProps) {
+  const { t, tt } = useI18n()
   const [isExpanded, setIsExpanded] = useState(false)
   const currentExecution = useWorkflowStore((s) => s.currentExecution)
   const executionHistory = useWorkflowStore((s) => s.executionHistory)
@@ -41,7 +43,7 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-foreground">Execution Log</span>
+          <span className="text-sm font-medium text-foreground">{t('executionLog')}</span>
           {latestExecution && (
             <span
               className={cn(
@@ -54,11 +56,11 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
               {latestExecution.status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
               {latestExecution.status === 'success' && <CheckCircle2 className="w-3 h-3" />}
               {latestExecution.status === 'error' && <XCircle className="w-3 h-3" />}
-              {latestExecution.status}
+              {t(latestExecution.status as 'pending' | 'running' | 'success' | 'error' | 'skipped')}
             </span>
           )}
           <span className="text-xs text-muted-foreground">
-            {nodeResults.length} node{nodeResults.length !== 1 ? 's' : ''} executed
+            {nodeResults.length} {t('nodes').toLowerCase()} {t('executed')}
           </span>
         </div>
 
@@ -73,7 +75,7 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
                 clearExecutionHistory()
               }}
             >
-              Clear History
+              {t('clearHistory')}
             </Button>
           )}
           {isExpanded ? (
@@ -109,7 +111,7 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
                       {result.status === 'error' && <XCircle className="w-4 h-4 text-red-400" />}
                       {result.status === 'pending' && <Clock className="w-4 h-4 text-muted-foreground" />}
                       <span className="text-sm font-medium text-foreground">
-                        {node?.data.label || nodeId}
+                        {node?.data.label ? tt(node.data.label) : nodeId}
                       </span>
                     </div>
                     {result.duration !== undefined && (
@@ -119,7 +121,7 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
 
                   {result.output !== undefined && (
                     <div className="mt-2">
-                      <p className="text-xs text-muted-foreground mb-1">Output:</p>
+                      <p className="text-xs text-muted-foreground mb-1">{t('output')}:</p>
                       <pre className="p-2 rounded bg-background/50 text-xs font-mono overflow-auto max-h-24">
                         {JSON.stringify(result.output, null, 2)}
                       </pre>
@@ -128,7 +130,7 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
 
                   {result.error && (
                     <div className="mt-2">
-                      <p className="text-xs text-red-400 mb-1">Error:</p>
+                      <p className="text-xs text-red-400 mb-1">{t('error')}:</p>
                       <pre className="p-2 rounded bg-red-500/10 text-xs font-mono text-red-400 overflow-auto">
                         {result.error}
                       </pre>
@@ -140,7 +142,7 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
 
             {nodeResults.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No execution data available
+                {t('noExecutionAvailable')}
               </p>
             )}
           </div>

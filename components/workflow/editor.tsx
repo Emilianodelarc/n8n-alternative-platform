@@ -17,12 +17,14 @@ import { useWorkflowStore } from '@/lib/workflow/store'
 import { executeWorkflow } from '@/lib/workflow/engine'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 interface WorkflowEditorProps {
   workflowId: string
 }
 
 export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
+  const { t } = useI18n()
   const [isExecuting, setIsExecuting] = useState(false)
   const [rightPanelTab, setRightPanelTab] = useState<'config' | 'variables' | 'debug' | 'history'>('config')
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -95,22 +97,22 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
           onRedo={redo}
         />
         
-        <div className="flex flex-1 overflow-hidden relative">
+        <div className="flex flex-1 min-h-0 overflow-hidden relative">
           {/* Left sidebar - Node Library */}
-          <NodeLibrary className="w-64 shrink-0" />
+          <NodeLibrary className="w-64 min-h-0 shrink-0" />
           
           {/* Main canvas */}
-          <div className="flex-1 relative">
+          <div className="flex-1 min-w-0 min-h-0 relative">
             <WorkflowCanvas />
             <ExecutionPanel />
           </div>
           
           {/* Right sidebar - Panel with tabs */}
-          <div className="w-80 shrink-0 border-l border-border bg-card flex flex-col">
-            <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as typeof rightPanelTab)} className="flex flex-col h-full">
+          <div className="w-80 min-h-0 shrink-0 border-l border-border bg-card flex flex-col">
+            <Tabs value={rightPanelTab} onValueChange={(v) => setRightPanelTab(v as typeof rightPanelTab)} className="flex flex-col h-full min-h-0">
               <TabsList className="grid w-full grid-cols-4 rounded-none border-b h-10">
                 <TabsTrigger value="config" className="text-xs rounded-none data-[state=active]:bg-background">
-                  Config
+                  {t('config')}
                 </TabsTrigger>
                 <TabsTrigger value="variables" className="text-xs rounded-none data-[state=active]:bg-background">
                   <Variable className="w-3 h-3" />
@@ -122,13 +124,13 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
                   <History className="w-3 h-3" />
                 </TabsTrigger>
               </TabsList>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <TabsContent value="config" className="h-full m-0 data-[state=inactive]:hidden">
                   {selectedNodeId ? (
                     <NodePanel className="h-full" />
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                      Select a node to configure
+                      {t('selectNode')}
                     </div>
                   )}
                 </TabsContent>

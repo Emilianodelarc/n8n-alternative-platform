@@ -10,6 +10,7 @@ import {
   useEdgesState,
   type Connection,
   type Edge,
+  MarkerType,
   type Node,
   type ReactFlowInstance,
   BackgroundVariant,
@@ -19,12 +20,18 @@ import { useWorkflowStore } from '@/lib/workflow/store'
 import { NODE_TYPES, type NodeCategory } from '@/lib/workflow/types'
 import { nodeTypes } from './nodes'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
+
+type WorkflowFlowNode = Node<Record<string, unknown>>
+
+const edgeStroke = '#2563eb'
 
 interface WorkflowCanvasProps {
   className?: string
 }
 
 export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
+  const { t } = useI18n()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null)
 
@@ -37,7 +44,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   const setSelectedNode = useWorkflowStore((s) => s.setSelectedNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowFlowNode>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   // Sync store changes to local state
@@ -53,7 +60,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         id: node.id,
         type: node.type,
         position: node.position,
-        data: node.data,
+        data: { ...node.data },
         selected: node.id === selectedNodeId,
       }))
     )
@@ -66,8 +73,18 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         sourceHandle: edge.sourceHandle,
         targetHandle: edge.targetHandle,
         type: 'smoothstep',
-        animated: false,
-        style: { stroke: 'hsl(var(--muted-foreground))', strokeWidth: 2 },
+        animated: true,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: edgeStroke,
+          width: 18,
+          height: 18,
+        },
+        style: {
+          stroke: edgeStroke,
+          strokeWidth: 4,
+          opacity: 1,
+        },
       }))
     )
   }, [workflow, selectedNodeId, setNodes, setEdges])
@@ -160,7 +177,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   if (!workflow) {
     return (
       <div className={cn('flex items-center justify-center h-full bg-background', className)}>
-        <p className="text-muted-foreground">No workflow selected</p>
+        <p className="text-muted-foreground">{t('noWorkflowSelected')}</p>
       </div>
     )
   }
@@ -193,7 +210,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
           variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
-          color="hsl(var(--muted-foreground) / 0.2)"
+          color="var(--canvas-dot)"
         />
         <Controls
           className="!bg-card !border-border !rounded-lg !shadow-lg [&_button]:!bg-card [&_button]:!border-border [&_button]:!text-foreground [&_button:hover]:!bg-accent"

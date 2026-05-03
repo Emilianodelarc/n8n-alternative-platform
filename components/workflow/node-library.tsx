@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { NODE_TYPES, CATEGORY_INFO, type NodeCategory, type NodeTypeDefinition } from '@/lib/workflow/types'
+import { useI18n } from '@/lib/i18n'
 import {
   Play,
   Webhook,
@@ -23,7 +24,30 @@ import {
   Split,
   Timer,
   Circle,
+  Bell,
+  BookOpen,
+  Brain,
+  Braces,
+  CalendarDays,
+  CreditCard,
+  Database,
+  FileCode2,
+  FileSpreadsheet,
+  FileText,
+  Github,
+  HardDrive,
+  ListFilter,
+  MessageCircle,
+  OctagonX,
+  Phone,
+  Presentation,
+  Reply,
+  Route,
   Search,
+  Send,
+  Sparkles,
+  Table,
+  Table2,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
@@ -46,6 +70,29 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Split,
   Timer,
   Circle,
+  Bell,
+  BookOpen,
+  Brain,
+  Braces,
+  CalendarDays,
+  CreditCard,
+  Database,
+  FileCode2,
+  FileSpreadsheet,
+  FileText,
+  Github,
+  HardDrive,
+  ListFilter,
+  MessageCircle,
+  OctagonX,
+  Phone,
+  Presentation,
+  Reply,
+  Route,
+  Send,
+  Sparkles,
+  Table,
+  Table2,
 }
 
 const categoryStyles: Record<NodeCategory, { bg: string; text: string; border: string }> = {
@@ -61,6 +108,7 @@ interface NodeLibraryProps {
 }
 
 export function NodeLibrary({ className }: NodeLibraryProps) {
+  const { t, tt } = useI18n()
   const [search, setSearch] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<NodeCategory>>(
     new Set(['trigger', 'action', 'logic', 'transform', 'utility'])
@@ -79,7 +127,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
   const onDragStart = (event: React.DragEvent, nodeType: NodeTypeDefinition) => {
     event.dataTransfer.setData('application/reactflow', JSON.stringify({
       type: nodeType.type,
-      label: nodeType.label,
+      label: tt(nodeType.label),
       category: nodeType.category,
     }))
     event.dataTransfer.effectAllowed = 'move'
@@ -87,8 +135,8 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
 
   const filteredNodes = Object.values(NODE_TYPES).filter(
     (node) =>
-      node.label.toLowerCase().includes(search.toLowerCase()) ||
-      node.description.toLowerCase().includes(search.toLowerCase())
+      tt(node.label).toLowerCase().includes(search.toLowerCase()) ||
+      tt(node.description).toLowerCase().includes(search.toLowerCase())
   )
 
   const groupedNodes = filteredNodes.reduce(
@@ -105,13 +153,13 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
   const categories: NodeCategory[] = ['trigger', 'action', 'logic', 'transform', 'utility']
 
   return (
-    <div className={cn('flex flex-col h-full bg-sidebar border-r border-sidebar-border', className)}>
+    <div className={cn('flex flex-col h-full min-h-0 overflow-hidden bg-sidebar border-r border-sidebar-border', className)}>
       <div className="p-3 border-b border-sidebar-border">
-        <h2 className="text-sm font-semibold text-foreground mb-3">Nodes</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-3">{t('nodes')}</h2>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Search nodes..."
+            placeholder={t('searchNodes')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8 h-8 text-sm bg-sidebar-accent border-sidebar-border"
@@ -119,7 +167,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-2">
           {categories.map((category) => {
             const nodes = groupedNodes[category] || []
@@ -127,6 +175,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
 
             const isExpanded = expandedCategories.has(category)
             const categoryInfo = CATEGORY_INFO[category]
+            const categoryLabel = t(categoryInfo.label.toLowerCase() as 'triggers' | 'actions' | 'logic' | 'transform' | 'utility')
             const styles = categoryStyles[category]
 
             return (
@@ -144,7 +193,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
                     className={cn('w-2 h-2 rounded-full', styles.bg)}
                     style={{ backgroundColor: categoryInfo.color }}
                   />
-                  {categoryInfo.label}
+                  {categoryLabel}
                   <span className="ml-auto text-xs text-muted-foreground">{nodes.length}</span>
                 </button>
 
@@ -167,10 +216,10 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
                           <Icon className={cn('w-4 h-4 shrink-0', styles.text)} />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-foreground truncate">
-                              {node.label}
+                              {tt(node.label)}
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
-                              {node.description}
+                              {tt(node.description)}
                             </p>
                           </div>
                         </div>

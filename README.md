@@ -2,6 +2,18 @@
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
 
+## Automation capabilities
+
+The workflow editor includes n8n-style nodes for creating and handling common business files:
+
+- Google Sheets: create spreadsheets, read ranges, write rows, and append rows.
+- Google Docs: create documents, append text, replace text, and export.
+- Google Slides / PPT: create presentations, add slides, replace text, and export PPTX.
+- Google Drive: create/upload files such as JSON, Docs, Sheets, Slides, text, and CSV.
+- JSON: build JSON objects/files from workflow input data.
+
+Nodes execute against real services where a connector is implemented. Nodes without a real connector fail explicitly instead of returning simulated success data.
+
 ## Built with v0
 
 This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.

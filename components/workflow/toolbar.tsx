@@ -21,7 +21,10 @@ import {
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { LanguageToggle } from '@/components/language-toggle'
 import { useWorkflowStore } from '@/lib/workflow/store'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
   Play,
@@ -58,6 +61,7 @@ export function Toolbar({
   onRedo,
   className 
 }: ToolbarProps) {
+  const { t, tt } = useI18n()
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const updateWorkflow = useWorkflowStore((s) => s.updateWorkflow)
   const duplicateWorkflow = useWorkflowStore((s) => s.duplicateWorkflow)
@@ -108,7 +112,7 @@ export function Toolbar({
       setIsImportDialogOpen(false)
       setImportJson('')
     } catch {
-      alert('Invalid JSON format')
+      alert(t('invalidJson'))
     }
   }
 
@@ -120,7 +124,7 @@ export function Toolbar({
   }
 
   const handleDelete = () => {
-    if (workflow && confirm('Are you sure you want to delete this workflow?')) {
+    if (workflow && confirm(t('deleteWorkflowConfirm'))) {
       deleteWorkflow(workflow.id)
     }
   }
@@ -137,14 +141,14 @@ export function Toolbar({
             </Button>
           </Link>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-foreground">{workflow.name}</h1>
+            <h1 className="text-lg font-semibold text-foreground">{tt(workflow.name)}</h1>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleOpenEditDialog}>
               <Pencil className="w-3 h-3" />
             </Button>
           </div>
           {workflow.description && (
             <span className="text-sm text-muted-foreground hidden md:block">
-              {workflow.description}
+              {tt(workflow.description)}
             </span>
           )}
         </div>
@@ -158,7 +162,7 @@ export function Toolbar({
               className="h-8 w-8"
               onClick={onUndo}
               disabled={!canUndo}
-              title="Undo (Ctrl+Z)"
+              title={`${t('undo')} (Ctrl+Z)`}
             >
               <Undo2 className="w-4 h-4" />
             </Button>
@@ -168,7 +172,7 @@ export function Toolbar({
               className="h-8 w-8"
               onClick={onRedo}
               disabled={!canRedo}
-              title="Redo (Ctrl+Shift+Z)"
+              title={`${t('redo')} (Ctrl+Shift+Z)`}
             >
               <Redo2 className="w-4 h-4" />
             </Button>
@@ -182,15 +186,18 @@ export function Toolbar({
             {isExecuting ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Running...
+                {t('running')}
               </>
             ) : (
               <>
                 <Play className="w-4 h-4 mr-2" />
-                Execute
+                {t('execute')}
               </>
             )}
           </Button>
+
+          <LanguageToggle />
+          <ThemeToggle />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -201,25 +208,25 @@ export function Toolbar({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleOpenEditDialog}>
                 <Pencil className="w-4 h-4 mr-2" />
-                Edit Details
+                {t('editDetails')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleDuplicate}>
                 <Copy className="w-4 h-4 mr-2" />
-                Duplicate
+                {t('duplicate')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleExport}>
                 <Download className="w-4 h-4 mr-2" />
-                Export JSON
+                {t('exportJson')}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsImportDialogOpen(true)}>
                 <Upload className="w-4 h-4 mr-2" />
-                Import JSON
+                {t('importJson')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete Workflow
+                {t('deleteWorkflow')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -230,34 +237,34 @@ export function Toolbar({
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Workflow</DialogTitle>
-            <DialogDescription>Update the name and description of your workflow.</DialogDescription>
+            <DialogTitle>{t('editWorkflow')}</DialogTitle>
+            <DialogDescription>{t('editWorkflowDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="name">{t('name')}</Label>
               <Input
                 id="name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="Workflow name"
+                placeholder={t('workflowName')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">{t('description')}</Label>
               <Textarea
                 id="description"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Optional description"
+                placeholder={t('optionalDescription')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
+              {t('cancel')}
             </Button>
-            <Button onClick={handleSaveEdit}>Save Changes</Button>
+            <Button onClick={handleSaveEdit}>{t('saveChanges')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -266,22 +273,22 @@ export function Toolbar({
       <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Import Workflow</DialogTitle>
-            <DialogDescription>Paste the JSON content of a workflow to import it.</DialogDescription>
+            <DialogTitle>{t('importWorkflow')}</DialogTitle>
+            <DialogDescription>{t('importWorkflowDescription')}</DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <Textarea
               value={importJson}
               onChange={(e) => setImportJson(e.target.value)}
-              placeholder="Paste workflow JSON here..."
+              placeholder={t('pasteWorkflowJson')}
               className="min-h-[200px] font-mono text-sm"
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>
-              Cancel
+              {t('cancel')}
             </Button>
-            <Button onClick={handleImport}>Import</Button>
+            <Button onClick={handleImport}>{t('import')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

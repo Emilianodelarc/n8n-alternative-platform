@@ -7,8 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useWorkflowStore } from '@/lib/workflow/store'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 export function DebugControls() {
+  const { t, tt } = useI18n()
   const debugMode = useWorkflowStore((s) => s.debugMode)
   const setDebugMode = useWorkflowStore((s) => s.setDebugMode)
   const debugBreakpoints = useWorkflowStore((s) => s.debugBreakpoints)
@@ -30,7 +32,7 @@ export function DebugControls() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Bug className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold">Debug Mode</h3>
+          <h3 className="font-semibold">{t('debugMode')}</h3>
         </div>
         <div className="flex items-center gap-2">
           <Switch
@@ -39,7 +41,7 @@ export function DebugControls() {
             onCheckedChange={setDebugMode}
           />
           <Label htmlFor="debug-mode" className="text-sm">
-            {debugMode ? 'On' : 'Off'}
+            {debugMode ? t('on') : t('off')}
           </Label>
         </div>
       </div>
@@ -48,15 +50,14 @@ export function DebugControls() {
         <>
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
             <p className="text-xs text-amber-200">
-              Debug mode enabled. Click on nodes to toggle breakpoints. 
-              Execution will pause at breakpoints.
+              {t('debugDescription')}
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Breakpoints ({debugBreakpoints.size})</Label>
+            <Label className="text-xs text-muted-foreground">{t('breakpoints')} ({debugBreakpoints.size})</Label>
             {debugBreakpoints.size === 0 ? (
-              <p className="text-xs text-muted-foreground">No breakpoints set. Click nodes to add.</p>
+              <p className="text-xs text-muted-foreground">{t('noBreakpoints')}</p>
             ) : (
               <div className="flex flex-wrap gap-1">
                 {Array.from(debugBreakpoints).map((nodeId) => {
@@ -64,7 +65,7 @@ export function DebugControls() {
                   return (
                     <Badge key={nodeId} variant="outline" className="text-xs">
                       <Circle className="w-2 h-2 mr-1 fill-red-500 text-red-500" />
-                      {node?.data.label || nodeId.slice(0, 8)}
+                      {node?.data.label ? tt(node.data.label) : nodeId.slice(0, 8)}
                     </Badge>
                   )
                 })}
@@ -77,7 +78,7 @@ export function DebugControls() {
               <div className="flex items-center gap-2">
                 <Pause className="w-4 h-4 text-yellow-500" />
                 <span className="text-sm font-medium text-yellow-200">
-                  Paused at: {pausedNode?.data.label || 'Unknown'}
+                  {t('pausedAt')}: {pausedNode?.data.label ? tt(pausedNode.data.label) : t('unknown')}
                 </span>
               </div>
               
@@ -89,7 +90,7 @@ export function DebugControls() {
                   className="flex-1"
                 >
                   <Play className="w-3 h-3 mr-1" />
-                  Continue
+                  {t('continue')}
                 </Button>
                 <Button
                   size="sm"
@@ -98,7 +99,7 @@ export function DebugControls() {
                   className="flex-1"
                 >
                   <SkipForward className="w-3 h-3 mr-1" />
-                  Step
+                  {t('step')}
                 </Button>
               </div>
             </div>
@@ -107,18 +108,18 @@ export function DebugControls() {
           {isRunning && !isPaused && (
             <div className="flex items-center gap-2 p-2 rounded bg-green-500/10 border border-green-500/30">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs text-green-200">Executing...</span>
+              <span className="text-xs text-green-200">{t('executing')}</span>
             </div>
           )}
         </>
       )}
 
       <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-        <p className="font-medium">Keyboard shortcuts:</p>
+        <p className="font-medium">{t('keyboardShortcuts')}</p>
         <div className="grid grid-cols-2 gap-1">
-          <span>F9</span><span>Toggle breakpoint</span>
-          <span>F5</span><span>Continue</span>
-          <span>F10</span><span>Step over</span>
+          <span>F9</span><span>{t('toggleBreakpoint')}</span>
+          <span>F5</span><span>{t('continue')}</span>
+          <span>F10</span><span>{t('stepOver')}</span>
         </div>
       </div>
     </div>

@@ -32,6 +32,9 @@ import {
   LayoutTemplate,
 } from 'lucide-react'
 import { TemplatesGallery } from '@/components/workflow/templates-gallery'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { LanguageToggle } from '@/components/language-toggle'
+import { useI18n } from '@/lib/i18n'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 export default function DashboardPage() {
+  const { t, tt } = useI18n()
   const workflows = useWorkflowStore((s) => s.workflows)
   const createWorkflow = useWorkflowStore((s) => s.createWorkflow)
   const duplicateWorkflow = useWorkflowStore((s) => s.duplicateWorkflow)
@@ -79,7 +83,7 @@ export default function DashboardPage() {
   }
 
   const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this workflow?')) {
+    if (confirm(t('deleteWorkflowConfirm'))) {
       deleteWorkflow(id)
     }
   }
@@ -99,6 +103,21 @@ export default function DashboardPage() {
     }
   }
 
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case 'trigger':
+        return t('triggers')
+      case 'action':
+        return t('actions')
+      case 'logic':
+        return t('logic')
+      case 'transform':
+        return t('transform')
+      default:
+        return t('utility')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -111,23 +130,26 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">FlowCraft</h1>
-                <p className="text-sm text-muted-foreground">Workflow Automation</p>
+                <p className="text-sm text-muted-foreground">{t('workflowAutomation')}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <LanguageToggle />
+              <ThemeToggle />
+
               <Dialog open={isTemplatesDialogOpen} onOpenChange={setIsTemplatesDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline">
                     <LayoutTemplate className="w-4 h-4 mr-2" />
-                    Templates
+                    {t('templates')}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-3xl">
                   <DialogHeader>
-                    <DialogTitle>Workflow Templates</DialogTitle>
+                    <DialogTitle>{t('workflowTemplates')}</DialogTitle>
                     <DialogDescription>
-                      Start with a pre-built workflow template and customize it.
+                      {t('workflowTemplatesDescription')}
                     </DialogDescription>
                   </DialogHeader>
                   <TemplatesGallery onClose={() => setIsTemplatesDialogOpen(false)} />
@@ -138,43 +160,43 @@ export default function DashboardPage() {
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="w-4 h-4 mr-2" />
-                    New Workflow
+                    {t('newWorkflow')}
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create New Workflow</DialogTitle>
+                  <DialogTitle>{t('createNewWorkflow')}</DialogTitle>
                   <DialogDescription>
-                    Give your workflow a name and optional description.
+                    {t('createNewWorkflowDescription')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
+                    <Label htmlFor="name">{t('name')}</Label>
                     <Input
                       id="name"
                       value={newWorkflowName}
                       onChange={(e) => setNewWorkflowName(e.target.value)}
-                      placeholder="My Awesome Workflow"
+                      placeholder={t('workflowNamePlaceholder')}
                       autoFocus
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="description">Description (optional)</Label>
+                    <Label htmlFor="description">{t('descriptionOptional')}</Label>
                     <Textarea
                       id="description"
                       value={newWorkflowDescription}
                       onChange={(e) => setNewWorkflowDescription(e.target.value)}
-                      placeholder="What does this workflow do?"
+                      placeholder={t('workflowDescriptionPlaceholder')}
                     />
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Cancel
+                    {t('cancel')}
                   </Button>
                   <Button onClick={handleCreateWorkflow} disabled={!newWorkflowName.trim()}>
-                    Create Workflow
+                    {t('createWorkflow')}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -191,14 +213,14 @@ export default function DashboardPage() {
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search workflows..."
+              placeholder={t('searchWorkflows')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
             />
           </div>
           <div className="text-sm text-muted-foreground">
-            {filteredWorkflows.length} workflow{filteredWorkflows.length !== 1 ? 's' : ''}
+            {filteredWorkflows.length} {filteredWorkflows.length !== 1 ? t('workflows') : t('workflow')}
           </div>
         </div>
 
@@ -208,14 +230,14 @@ export default function DashboardPage() {
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
               <Workflow className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h2 className="text-lg font-semibold text-foreground mb-2">No workflows found</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">{t('noWorkflowsFound')}</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              {search ? 'Try a different search term' : 'Create your first workflow to get started'}
+              {search ? t('tryDifferentSearch') : t('createFirstWorkflow')}
             </p>
             {!search && (
               <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <Plus className="w-4 h-4 mr-2" />
-                Create Workflow
+                {t('createWorkflow')}
               </Button>
             )}
           </div>
@@ -232,10 +254,10 @@ export default function DashboardPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <CardTitle className="text-base truncate">{workflow.name}</CardTitle>
+                        <CardTitle className="text-base truncate">{tt(workflow.name)}</CardTitle>
                         {workflow.description && (
                           <CardDescription className="mt-1 line-clamp-2">
-                            {workflow.description}
+                            {tt(workflow.description)}
                           </CardDescription>
                         )}
                       </div>
@@ -252,7 +274,7 @@ export default function DashboardPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleDuplicate(workflow.id)}>
                             <Copy className="w-4 h-4 mr-2" />
-                            Duplicate
+                            {t('duplicate')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -260,7 +282,7 @@ export default function DashboardPage() {
                             className="text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
+                            {t('delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -270,7 +292,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
                       <div className="flex items-center gap-1">
                         <GitBranch className="w-4 h-4" />
-                        <span>{workflow.nodes.length} nodes</span>
+                        <span>{workflow.nodes.length} {t('nodes').toLowerCase()}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
@@ -286,7 +308,7 @@ export default function DashboardPage() {
                           variant="outline"
                           className={getCategoryColor(category)}
                         >
-                          {category}
+                          {getCategoryLabel(category)}
                         </Badge>
                       ))}
                       {nodeCategories.length > 3 && (

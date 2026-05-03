@@ -22,9 +22,11 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useWorkflowStore } from '@/lib/workflow/store'
+import { useI18n } from '@/lib/i18n'
 import type { GlobalVariable } from '@/lib/workflow/types'
 
 export function VariablesPanel() {
+  const { t, tt } = useI18n()
   const globalVariables = useWorkflowStore((s) => s.globalVariables)
   const addGlobalVariable = useWorkflowStore((s) => s.addGlobalVariable)
   const updateGlobalVariable = useWorkflowStore((s) => s.updateGlobalVariable)
@@ -78,22 +80,22 @@ export function VariablesPanel() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Variable className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold">Global Variables</h3>
+          <h3 className="font-semibold">{t('globalVariables')}</h3>
         </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline">
               <Plus className="w-4 h-4 mr-1" />
-              Add
+              {t('add')}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add Global Variable</DialogTitle>
+              <DialogTitle>{t('addGlobalVariable')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Name</Label>
+                <Label>{t('name')}</Label>
                 <Input
                   placeholder="myVariable"
                   value={newVar.name}
@@ -101,7 +103,7 @@ export function VariablesPanel() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Type</Label>
+                <Label>{t('type')}</Label>
                 <Select
                   value={newVar.type}
                   onValueChange={(v) => setNewVar({ ...newVar, type: v as GlobalVariable['type'] })}
@@ -110,26 +112,26 @@ export function VariablesPanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="string">String</SelectItem>
-                    <SelectItem value="number">Number</SelectItem>
-                    <SelectItem value="boolean">Boolean</SelectItem>
+                    <SelectItem value="string">{tt('String')}</SelectItem>
+                    <SelectItem value="number">{tt('Number')}</SelectItem>
+                    <SelectItem value="boolean">{tt('Boolean')}</SelectItem>
                     <SelectItem value="json">JSON</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Value</Label>
+                <Label>{t('value')}</Label>
                 {newVar.type === 'boolean' ? (
                   <Select
                     value={newVar.value}
                     onValueChange={(v) => setNewVar({ ...newVar, value: v })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select..." />
+                      <SelectValue placeholder={t('selectPlaceholder')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="true">True</SelectItem>
-                      <SelectItem value="false">False</SelectItem>
+                      <SelectItem value="true">{t('enabled')}</SelectItem>
+                      <SelectItem value="false">{t('disabled')}</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : newVar.type === 'json' ? (
@@ -142,7 +144,7 @@ export function VariablesPanel() {
                   />
                 ) : (
                   <Input
-                    placeholder="Value"
+                    placeholder={t('value')}
                     type={newVar.type === 'number' ? 'number' : 'text'}
                     value={newVar.value}
                     onChange={(e) => setNewVar({ ...newVar, value: e.target.value })}
@@ -150,15 +152,15 @@ export function VariablesPanel() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label>Description (optional)</Label>
+                <Label>{t('descriptionOptional')}</Label>
                 <Input
-                  placeholder="Description..."
+                  placeholder={t('optionalDescription')}
                   value={newVar.description}
                   onChange={(e) => setNewVar({ ...newVar, description: e.target.value })}
                 />
               </div>
               <Button onClick={handleAdd} className="w-full">
-                Add Variable
+                {t('addVariable')}
               </Button>
             </div>
           </DialogContent>
@@ -169,8 +171,8 @@ export function VariablesPanel() {
         {globalVariables.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Variable className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No global variables defined</p>
-            <p className="text-xs">Variables can be accessed in any node</p>
+            <p className="text-sm">{t('noGlobalVariables')}</p>
+            <p className="text-xs">{t('variablesUsage')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -216,9 +218,9 @@ export function VariablesPanel() {
       </ScrollArea>
 
       <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-        <p className="font-medium">Usage in nodes:</p>
+        <p className="font-medium">{t('usageInNodes')}</p>
         <code className="block p-2 bg-muted rounded text-xs">
-          {'${{variableName}}'} or variables.variableName
+          {'${{variableName}}'} {t('or')} variables.variableName
         </code>
       </div>
     </div>
