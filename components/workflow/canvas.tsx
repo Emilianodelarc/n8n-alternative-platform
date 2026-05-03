@@ -159,10 +159,9 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       const nodeTypeDef = NODE_TYPES[type]
       if (!nodeTypeDef) return
 
-      const bounds = reactFlowWrapper.current.getBoundingClientRect()
       const position = reactFlowInstance.current.screenToFlowPosition({
-        x: event.clientX - bounds.left,
-        y: event.clientY - bounds.top,
+        x: event.clientX,
+        y: event.clientY,
       })
 
       addNode({
