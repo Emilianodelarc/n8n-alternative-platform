@@ -34,7 +34,7 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   const [isMobileLibraryOpen, setIsMobileLibraryOpen] = useState(false)
   const [isMobileInspectorOpen, setIsMobileInspectorOpen] = useState(false)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  
+
   // Keyboard shortcuts (undo/redo, copy/paste, delete)
   const { canUndo, canRedo, undo, redo } = useKeyboardShortcuts()
   const setActiveWorkflow = useWorkflowStore((s) => s.setActiveWorkflow)
@@ -118,8 +118,8 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   return (
     <ReactFlowProvider>
       <div className="flex h-screen min-w-0 flex-col overflow-hidden bg-background">
-        <Toolbar 
-          onExecute={handleExecute} 
+        <Toolbar
+          onExecute={handleExecute}
           isExecuting={isExecuting}
           canUndo={canUndo}
           canRedo={canRedo}
@@ -132,7 +132,7 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
           onOpenMobileLibrary={() => setIsMobileLibraryOpen(true)}
           onOpenMobileInspector={() => setIsMobileInspectorOpen(true)}
         />
-        
+
         <div className="relative hidden min-h-0 flex-1 overflow-hidden lg:block">
           <ResizablePanelGroup direction="horizontal" className="h-full">
             {isLibraryOpen && (
@@ -144,7 +144,7 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
               </>
             )}
             <ResizablePanel defaultSize={isLibraryOpen && isInspectorOpen ? 50 : 72} minSize={36}>
-              <div className="relative h-full min-w-0">
+              <div className="relative h-full min-h-0 min-w-0 overflow-hidden">
                 <WorkflowCanvas />
                 <ExecutionPanel />
                 {!isLibraryOpen && (
