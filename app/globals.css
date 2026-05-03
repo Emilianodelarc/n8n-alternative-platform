@@ -176,13 +176,13 @@
   .react-flow__edge-path,
   .react-flow__connection-path {
     stroke: var(--edge-stroke) !important;
-    stroke-width: 4 !important;
+    stroke-width: 2.5 !important;
     opacity: 1 !important;
   }
 
   .react-flow__edge.selected .react-flow__edge-path {
     stroke: var(--edge-stroke-hover) !important;
-    stroke-width: 5 !important;
+    stroke-width: 3.5 !important;
   }
 
   .react-flow__edge.animated path {

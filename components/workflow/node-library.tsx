@@ -153,22 +153,27 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
   const categories: NodeCategory[] = ['trigger', 'action', 'logic', 'transform', 'utility']
 
   return (
-    <div className={cn('flex flex-col h-full min-h-0 overflow-hidden bg-sidebar border-r border-sidebar-border', className)}>
-      <div className="p-3 border-b border-sidebar-border">
-        <h2 className="text-sm font-semibold text-foreground mb-3">{t('nodes')}</h2>
+    <div className={cn('flex h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar', className)}>
+      <div className="shrink-0 border-b border-sidebar-border p-3">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-foreground">{t('nodes')}</h2>
+          <span className="rounded border border-sidebar-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {filteredNodes.length}
+          </span>
+        </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder={t('searchNodes')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 text-sm bg-sidebar-accent border-sidebar-border"
+            className="h-8 border-sidebar-border bg-sidebar-accent pl-8 text-sm"
           />
         </div>
       </div>
 
       <ScrollArea className="flex-1 min-h-0">
-        <div className="p-2">
+        <div className="p-2.5">
           {categories.map((category) => {
             const nodes = groupedNodes[category] || []
             if (nodes.length === 0 && search) return null
@@ -179,10 +184,10 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
             const styles = categoryStyles[category]
 
             return (
-              <div key={category} className="mb-2">
+              <div key={category} className="mb-2.5">
                 <button
                   onClick={() => toggleCategory(category)}
-                  className="flex items-center gap-2 w-full px-2 py-1.5 text-sm font-medium text-foreground hover:bg-sidebar-accent rounded transition-colors"
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs font-semibold uppercase tracking-normal text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
                 >
                   {isExpanded ? (
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -193,12 +198,12 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
                     className={cn('w-2 h-2 rounded-full', styles.bg)}
                     style={{ backgroundColor: categoryInfo.color }}
                   />
-                  {categoryLabel}
+                  <span className="truncate">{categoryLabel}</span>
                   <span className="ml-auto text-xs text-muted-foreground">{nodes.length}</span>
                 </button>
 
                 {isExpanded && (
-                  <div className="mt-1 ml-2 space-y-1">
+                  <div className="mt-1 space-y-1">
                     {nodes.map((node) => {
                       const Icon = iconMap[node.icon] || Circle
                       return (
@@ -207,18 +212,18 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
                           draggable
                           onDragStart={(e) => onDragStart(e, node)}
                           className={cn(
-                            'flex items-center gap-2 px-2 py-2 rounded-md border cursor-grab active:cursor-grabbing',
-                            'hover:bg-accent/50 transition-colors',
-                            styles.bg,
-                            styles.border
+                            'flex cursor-grab items-center gap-2 rounded-md border border-sidebar-border bg-card px-2.5 py-2 active:cursor-grabbing',
+                            'transition-colors hover:border-primary/40 hover:bg-accent/70 hover:shadow-sm'
                           )}
                         >
-                          <Icon className={cn('w-4 h-4 shrink-0', styles.text)} />
+                          <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded border', styles.bg, styles.border)}>
+                            <Icon className={cn('h-3.5 w-3.5', styles.text)} />
+                          </span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground truncate">
+                            <p className="truncate text-sm font-medium leading-tight text-foreground">
                               {tt(node.label)}
                             </p>
-                            <p className="text-xs text-muted-foreground truncate">
+                            <p className="truncate text-[11px] leading-tight text-muted-foreground">
                               {tt(node.description)}
                             </p>
                           </div>

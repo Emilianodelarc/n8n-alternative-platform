@@ -24,7 +24,7 @@ import { useI18n } from '@/lib/i18n'
 
 type WorkflowFlowNode = Node<Record<string, unknown>>
 
-const edgeStroke = '#2563eb'
+const edgeStroke = '#3b82f6'
 
 interface WorkflowCanvasProps {
   className?: string
@@ -82,7 +82,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         },
         style: {
           stroke: edgeStroke,
-          strokeWidth: 4,
+          strokeWidth: 2.5,
           opacity: 1,
         },
       }))
@@ -208,15 +208,15 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={20}
+          gap={24}
           size={1}
           color="var(--canvas-dot)"
         />
         <Controls
-          className="!bg-card !border-border !rounded-lg !shadow-lg [&_button]:!bg-card [&_button]:!border-border [&_button]:!text-foreground [&_button:hover]:!bg-accent"
+          className="!rounded-md !border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!text-foreground [&_button:hover]:!bg-accent"
         />
         <MiniMap
-          className="!bg-card !border-border !rounded-lg"
+          className="!hidden !rounded-md !border-border !bg-card lg:!block"
           nodeColor={(node) => {
             const category = (node.data as { category?: NodeCategory })?.category
             switch (category) {

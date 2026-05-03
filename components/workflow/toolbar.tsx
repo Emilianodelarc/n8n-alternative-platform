@@ -39,7 +39,8 @@ import {
   Loader2,
   Undo2,
   Redo2,
-  LayoutTemplate,
+  PanelLeft,
+  PanelRight,
 } from 'lucide-react'
 
 interface ToolbarProps {
@@ -49,6 +50,12 @@ interface ToolbarProps {
   canRedo?: boolean
   onUndo?: () => void
   onRedo?: () => void
+  isLibraryOpen?: boolean
+  isInspectorOpen?: boolean
+  onToggleLibrary?: () => void
+  onToggleInspector?: () => void
+  onOpenMobileLibrary?: () => void
+  onOpenMobileInspector?: () => void
   className?: string
 }
 
@@ -59,6 +66,12 @@ export function Toolbar({
   canRedo = false,
   onUndo,
   onRedo,
+  isLibraryOpen = true,
+  isInspectorOpen = true,
+  onToggleLibrary,
+  onToggleInspector,
+  onOpenMobileLibrary,
+  onOpenMobileInspector,
   className 
 }: ToolbarProps) {
   const { t, tt } = useI18n()
@@ -133,29 +146,59 @@ export function Toolbar({
 
   return (
     <>
-      <div className={cn('flex items-center justify-between px-4 py-2 border-b border-border bg-card', className)}>
-        <div className="flex items-center gap-3">
+      <div className={cn('flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 lg:flex-nowrap', className)}>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link href="/">
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <ChevronLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-foreground">{tt(workflow.name)}</h1>
+          <div className="hidden items-center gap-1 rounded-md border border-border bg-background p-1 lg:flex">
+            <Button
+              variant={isLibraryOpen ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleLibrary}
+              title={t('nodes')}
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={isInspectorOpen ? 'secondary' : 'ghost'}
+              size="icon"
+              className="h-7 w-7"
+              onClick={onToggleInspector}
+              title={t('config')}
+            >
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <h1 className="max-w-[42vw] truncate text-base font-semibold text-foreground sm:max-w-[52vw] lg:max-w-[320px]">
+              {tt(workflow.name)}
+            </h1>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleOpenEditDialog}>
               <Pencil className="w-3 h-3" />
             </Button>
           </div>
           {workflow.description && (
-            <span className="text-sm text-muted-foreground hidden md:block">
+            <span className="hidden max-w-[260px] truncate text-sm text-muted-foreground xl:block">
               {tt(workflow.description)}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex items-center gap-1 lg:hidden">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={onOpenMobileLibrary} title={t('nodes')}>
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={onOpenMobileInspector} title={t('config')}>
+              <PanelRight className="h-4 w-4" />
+            </Button>
+          </div>
           {/* Undo/Redo buttons */}
-          <div className="flex items-center border-r border-border pr-2 mr-1">
+          <div className="hidden items-center border-r border-border pr-2 sm:flex">
             <Button
               variant="ghost"
               size="icon"
@@ -181,27 +224,29 @@ export function Toolbar({
           <Button
             onClick={onExecute}
             disabled={isExecuting || workflow.nodes.length === 0}
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="h-8 bg-green-600 px-3 text-white hover:bg-green-700"
           >
             {isExecuting ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {t('running')}
+                <Loader2 className="mr-0 h-4 w-4 animate-spin sm:mr-2" />
+                <span className="hidden sm:inline">{t('running')}</span>
               </>
             ) : (
               <>
-                <Play className="w-4 h-4 mr-2" />
-                {t('execute')}
+                <Play className="mr-0 h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">{t('execute')}</span>
               </>
             )}
           </Button>
 
-          <LanguageToggle />
-          <ThemeToggle />
+          <div className="hidden items-center gap-1 md:flex">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button variant="outline" size="icon" className="h-8 w-8">
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -223,6 +268,11 @@ export function Toolbar({
                 <Upload className="w-4 h-4 mr-2" />
                 {t('importJson')}
               </DropdownMenuItem>
+              <DropdownMenuSeparator className="md:hidden" />
+              <div className="flex items-center gap-2 px-2 py-1.5 md:hidden">
+                <LanguageToggle />
+                <ThemeToggle />
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDelete} className="text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
