@@ -438,16 +438,16 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
         ))}
       </div>
 
-      <ScrollArea className="h-[400px]">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4">
+      <ScrollArea className="h-[min(62vh,520px)]">
+        <div className="grid grid-cols-1 gap-3 pr-3 lg:grid-cols-2">
           {filteredTemplates.map((template) => (
             <div
               key={template.id}
-              className="p-4 rounded-lg border border-border bg-card hover:border-primary/50 transition-colors"
+              className="rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/50"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex min-w-0 items-start gap-3">
                 <div
-                  className="p-2 rounded-lg"
+                  className="shrink-0 rounded-lg p-2"
                   style={{ backgroundColor: `${template.color}20` }}
                 >
                   <template.icon
@@ -455,21 +455,22 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
                     style={{ color: template.color }}
                   />
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <h4 className="font-medium truncate">{tt(template.name)}</h4>
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                     {tt(template.description)}
                   </p>
-                  <div className="flex items-center justify-between mt-3">
-                    <Badge variant="secondary" className="text-xs">
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <Badge variant="secondary" className="w-fit max-w-full truncate text-xs">
                       {t(categoryTranslationKeys[template.category])}
                     </Badge>
                     <Button
                       size="sm"
                       variant="outline"
+                      className="w-full shrink-0 sm:w-auto"
                       onClick={() => handleUseTemplate(template)}
                     >
-                      {t('useTemplate')}
+                      <span className="truncate">{t('useTemplate')}</span>
                     </Button>
                   </div>
                 </div>
