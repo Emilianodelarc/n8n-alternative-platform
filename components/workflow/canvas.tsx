@@ -199,7 +199,14 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         onDrop={onDrop}
         onInit={onInit}
         nodeTypes={nodeTypes}
-        fitView
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        fitView={false}
+        minZoom={0.35}
+        maxZoom={1.5}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        panOnScroll
+        panOnDrag
         snapToGrid
         snapGrid={[15, 15]}
         deleteKeyCode={['Backspace', 'Delete']}
