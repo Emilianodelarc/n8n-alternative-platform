@@ -75,6 +75,6 @@ export async function POST(request: Request, context: RouteContext) {
       error: (error as Error).message,
     }
     const saved = await saveExecution(execution).catch(() => execution)
-    return NextResponse.json({ execution: saved, error: (error as Error).message }, { status: 500 })
+    return NextResponse.json({ execution: saved, error: (error as Error).message })
   }
 }

@@ -209,6 +209,13 @@ function getCredentialHeaders(config: Record<string, unknown>): Record<string, s
 }
 
 function requireRealModeCredential(config: Record<string, unknown>, service: string): Record<string, string> {
+  const accessToken = typeof config.accessToken === 'string' ? config.accessToken.trim() : ''
+  if (service.toLowerCase().includes('google') || service.toLowerCase().includes('gmail')) {
+    if (accessToken.endsWith('.apps.googleusercontent.com')) {
+      throw new Error(`${service} needs an OAuth access token, not the Google OAuth Client ID. Use a token that starts with ya29...`)
+    }
+  }
+
   const headers = getCredentialHeaders(config)
   if (!headers.Authorization && Object.keys(headers).length === 0) {
     throw new Error(`${service} real mode requires credentials in the node Connection section`)
