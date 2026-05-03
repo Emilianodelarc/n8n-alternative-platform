@@ -57,7 +57,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       setEdges([])
       return
     }
-    
+
     setNodes(
       workflow.nodes.map((node) => ({
         id: node.id,
@@ -67,7 +67,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         selected: node.id === selectedNodeId,
       }))
     )
-    
+
     setEdges(
       workflow.edges.map((edge) => ({
         id: edge.id,
@@ -214,8 +214,9 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         maxZoom={1.5}
         zoomOnScroll={false}
         zoomOnPinch={false}
-        panOnScroll
-        panOnDrag
+        panOnScroll={false}
+        panOnDrag={true}
+        preventScrolling={true}
         snapToGrid
         snapGrid={[15, 15]}
         deleteKeyCode={['Backspace', 'Delete']}
