@@ -215,7 +215,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         zoomOnScroll={false}
         zoomOnPinch={false}
         panOnScroll={false}
-        panOnDrag={true}
+        panOnDrag={false}
         preventScrolling={true}
         snapToGrid
         snapGrid={[15, 15]}
