@@ -126,7 +126,7 @@ const credentialField: ConfigField = {
   key: 'credentialId',
   label: 'Credential',
   type: 'text',
-  placeholder: 'Credential name or ID',
+  placeholder: 'Optional; uses connected service credential',
 }
 
 const simpleOptionsField: ConfigField = {

@@ -221,6 +221,20 @@ export async function findWorkflowByWebhookPath(path: string, method: string) {
 export async function getCredentialConfig(id: string) {
   await ensureDatabaseInitialized()
   const sql = getSql()
+
+  if (id.startsWith('service:')) {
+    const service = id.slice('service:'.length)
+    const rows = await sql`
+      SELECT id, name, service, config, created_at, updated_at
+      FROM credentials
+      WHERE service = ${service}
+      ORDER BY updated_at DESC
+      LIMIT 1
+    ` as CredentialRow[]
+
+    return rows[0]?.config || null
+  }
+
   const rows = await sql`
     SELECT id, name, service, config, created_at, updated_at
     FROM credentials

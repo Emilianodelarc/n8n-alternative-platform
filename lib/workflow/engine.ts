@@ -12,6 +12,7 @@ interface ExecutionContext {
   callbacks: ExecutionCallbacks
   webhookPayload?: unknown
   credentialResolver?: (credentialId: string) => Promise<Record<string, unknown> | null>
+  currentNodeType?: string
 }
 
 interface ExecuteWorkflowOptions {
@@ -164,13 +165,35 @@ async function resolveNodeConfig(
 ): Promise<Record<string, unknown>> {
   const templatedConfig = resolveTemplates(config, input, ctx.workflow) as Record<string, unknown>
   const credentialId = templatedConfig.credentialId
+  const defaultCredentialId = getDefaultCredentialIdForNodeType(ctx.currentNodeType)
+  const resolvedCredentialId =
+    typeof credentialId === 'string' && credentialId.trim()
+      ? credentialId.trim()
+      : defaultCredentialId
 
-  if (!ctx.credentialResolver || typeof credentialId !== 'string' || !credentialId.trim()) {
+  if (!ctx.credentialResolver || !resolvedCredentialId) {
     return templatedConfig
   }
 
-  const credentialConfig = await ctx.credentialResolver(credentialId.trim())
+  const credentialConfig = await ctx.credentialResolver(resolvedCredentialId)
   return { ...(credentialConfig || {}), ...templatedConfig }
+}
+
+function getDefaultCredentialIdForNodeType(type?: string) {
+  if (!type) return null
+  if (
+    type === 'gmail' ||
+    type === 'send-email' ||
+    type === 'google-calendar' ||
+    type === 'google-sheets' ||
+    type === 'google-drive' ||
+    type === 'google-docs' ||
+    type === 'google-slides'
+  ) {
+    return 'service:google'
+  }
+  if (type === 'slack-message') return 'service:slack'
+  return null
 }
 
 function unsupportedRealNode(type: string): never {
@@ -462,6 +485,7 @@ async function executeNode(
   ctx: ExecutionContext
 ): Promise<unknown> {
   const { type, data } = node
+  ctx.currentNodeType = type
   const config = await resolveNodeConfig(data.config || {}, input, ctx)
 
   switch (type) {
