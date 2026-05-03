@@ -10,6 +10,13 @@ interface ExecutionContext {
   workflow: Workflow
   outputs: Map<string, unknown>
   callbacks: ExecutionCallbacks
+  webhookPayload?: unknown
+  credentialResolver?: (credentialId: string) => Promise<Record<string, unknown> | null>
+}
+
+interface ExecuteWorkflowOptions {
+  webhookPayload?: unknown
+  credentialResolver?: (credentialId: string) => Promise<Record<string, unknown> | null>
 }
 
 // Get nodes in topological order for execution
@@ -87,6 +94,83 @@ function parseJsonConfig(value: unknown, fallback: unknown): unknown {
   }
 
   return JSON.parse(value)
+}
+
+function readPath(source: unknown, path: string): unknown {
+  if (path === '' || path === '.') return source
+
+  return path.split('.').reduce((current, key) => {
+    if (current === null || current === undefined) return undefined
+    if (Array.isArray(current) && /^\d+$/.test(key)) return current[Number(key)]
+    if (typeof current === 'object') return (current as Record<string, unknown>)[key]
+    return undefined
+  }, source)
+}
+
+function stringifyTemplateValue(value: unknown) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value)
+}
+
+function resolveTemplateExpression(expression: string, input: unknown, workflow: Workflow) {
+  const trimmed = expression.trim()
+
+  if (trimmed === 'input') return input
+  if (trimmed.startsWith('input.')) return readPath(input, trimmed.slice('input.'.length))
+  if (trimmed === '$json') return input
+  if (trimmed.startsWith('$json.')) return readPath(input, trimmed.slice('$json.'.length))
+  if (trimmed === 'variables') return workflow.variables
+  if (trimmed.startsWith('variables.')) return readPath(workflow.variables, trimmed.slice('variables.'.length))
+
+  return undefined
+}
+
+function resolveTemplates(value: unknown, input: unknown, workflow: Workflow): unknown {
+  if (typeof value === 'string') {
+    const exactMatch = value.match(/^\{\{\s*([^}]+?)\s*\}\}$/)
+    if (exactMatch) {
+      const resolved = resolveTemplateExpression(exactMatch[1], input, workflow)
+      return resolved === undefined ? value : resolved
+    }
+
+    return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, expression: string) => {
+      const resolved = resolveTemplateExpression(expression, input, workflow)
+      return resolved === undefined ? `{{${expression}}}` : stringifyTemplateValue(resolved)
+    })
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => resolveTemplates(item, input, workflow))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        resolveTemplates(item, input, workflow),
+      ])
+    )
+  }
+
+  return value
+}
+
+async function resolveNodeConfig(
+  config: Record<string, unknown>,
+  input: unknown,
+  ctx: ExecutionContext
+): Promise<Record<string, unknown>> {
+  const templatedConfig = resolveTemplates(config, input, ctx.workflow) as Record<string, unknown>
+  const credentialId = templatedConfig.credentialId
+
+  if (!ctx.credentialResolver || typeof credentialId !== 'string' || !credentialId.trim()) {
+    return templatedConfig
+  }
+
+  const credentialConfig = await ctx.credentialResolver(credentialId.trim())
+  return { ...(credentialConfig || {}), ...templatedConfig }
 }
 
 function unsupportedRealNode(type: string): never {
@@ -253,7 +337,7 @@ async function executeNode(
   ctx: ExecutionContext
 ): Promise<unknown> {
   const { type, data } = node
-  const config = data.config || {}
+  const config = await resolveNodeConfig(data.config || {}, input, ctx)
 
   switch (type) {
     // Triggers - just pass through or provide initial data
@@ -269,6 +353,7 @@ async function executeNode(
         method: config.method,
         path: config.path,
         responseMode: config.responseMode,
+        data: ctx.webhookPayload ?? parseJsonConfig(config.samplePayload, {}),
         triggered: true,
         timestamp: new Date().toISOString(),
       }
@@ -737,11 +822,27 @@ async function executeNode(
     case 'whatsapp':
     case 'mongodb':
     case 'redis':
-    case 'postgres-query':
     case 'openai':
     case 'anthropic':
     case 'push-notification':
       return unsupportedRealNode(type)
+
+    case 'postgres-query': {
+      const { connectionString, query, parameters } = config as {
+        connectionString?: string
+        query?: string
+        parameters?: string
+      }
+
+      if (!query) throw new Error('SQL Query is required')
+      const { neon } = await import('@neondatabase/serverless')
+      const sql = neon(connectionString || process.env.DATABASE_URL || '')
+      if (!connectionString && !process.env.DATABASE_URL) {
+        throw new Error('PostgreSQL requires a Connection String or DATABASE_URL')
+      }
+
+      return sql.query(query, parseJsonConfig(parameters, []) as unknown[])
+    }
 
     // Utility nodes
     case 'delay': {
@@ -765,12 +866,15 @@ async function executeNode(
 
 export async function executeWorkflow(
   workflow: Workflow,
-  callbacks: ExecutionCallbacks = {}
+  callbacks: ExecutionCallbacks = {},
+  options: ExecuteWorkflowOptions = {}
 ): Promise<Map<string, unknown>> {
   const ctx: ExecutionContext = {
     workflow,
     outputs: new Map(),
     callbacks,
+    webhookPayload: options.webhookPayload,
+    credentialResolver: options.credentialResolver,
   }
 
   const executionOrder = getExecutionOrder(workflow.nodes, workflow.edges)

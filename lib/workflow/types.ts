@@ -160,7 +160,7 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     category: 'trigger',
     icon: 'Webhook',
     color: '#22c55e',
-    defaultConfig: { method: 'POST', path: '', responseMode: 'onReceived', responseCode: 200, responseData: 'firstEntryJson' },
+    defaultConfig: { method: 'POST', path: '', samplePayload: '{}', responseMode: 'onReceived', responseCode: 200, responseData: 'firstEntryJson' },
     configSchema: [
       { key: 'path', label: 'Path', type: 'text', placeholder: 'my-webhook' },
       {
@@ -175,6 +175,7 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
           { label: 'DELETE', value: 'DELETE' },
         ],
       },
+      { key: 'samplePayload', label: 'Example Payload (JSON)', type: 'json', placeholder: '{"user":{"email":"ada@example.com","name":"Ada"}}' },
       {
         key: 'responseMode',
         label: 'Respond',

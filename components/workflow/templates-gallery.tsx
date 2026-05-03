@@ -56,13 +56,32 @@ const TEMPLATES: WorkflowTemplate[] = [
           id: 'trigger',
           type: 'webhook-trigger',
           position: { x: 100, y: 200 },
-          data: { label: 'New User Signup', category: 'trigger', config: { method: 'POST' } },
+          data: {
+            label: 'New User Signup',
+            category: 'trigger',
+            config: {
+              method: 'POST',
+              path: 'new-user-signup',
+              samplePayload: '{"user":{"name":"Ada","email":"ada@example.com"},"plan":"starter"}',
+            },
+          },
         },
         {
           id: 'send-welcome',
           type: 'send-email',
           position: { x: 400, y: 200 },
-          data: { label: 'Send Welcome Email', category: 'action', config: { to: '{{user.email}}', subject: 'Welcome!', body: 'Thanks for joining!' } },
+          data: {
+            label: 'Send Welcome Email',
+            category: 'action',
+            config: {
+              from: 'hello@yourcompany.com',
+              to: '{{input.data.user.email}}',
+              subject: 'Welcome!',
+              emailFormat: 'html',
+              body: '<h1>Welcome {{input.data.user.name}}</h1><p>Thanks for joining. Your plan is {{input.data.plan}}.</p>',
+              attachments: '[]',
+            },
+          },
         },
         {
           id: 'delay',
@@ -74,7 +93,18 @@ const TEMPLATES: WorkflowTemplate[] = [
           id: 'send-tips',
           type: 'send-email',
           position: { x: 1000, y: 200 },
-          data: { label: 'Send Tips Email', category: 'action', config: { to: '{{user.email}}', subject: 'Quick Tips', body: 'Here are some tips...' } },
+          data: {
+            label: 'Send Tips Email',
+            category: 'action',
+            config: {
+              from: 'hello@yourcompany.com',
+              to: '{{input.data.user.email}}',
+              subject: 'Quick Tips',
+              emailFormat: 'html',
+              body: '<p>Hi {{input.data.user.name}}, here are some tips to get started...</p>',
+              attachments: '[]',
+            },
+          },
         },
       ],
       edges: [

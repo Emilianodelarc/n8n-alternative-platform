@@ -49,6 +49,7 @@ export default function DashboardPage() {
   const createWorkflow = useWorkflowStore((s) => s.createWorkflow)
   const duplicateWorkflow = useWorkflowStore((s) => s.duplicateWorkflow)
   const deleteWorkflow = useWorkflowStore((s) => s.deleteWorkflow)
+  const loadWorkflowsFromBackend = useWorkflowStore((s) => s.loadWorkflowsFromBackend)
 
   const [search, setSearch] = useState('')
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -60,8 +61,9 @@ export default function DashboardPage() {
   useEffect(() => {
     // Rehydrate store from localStorage on client
     useWorkflowStore.persist.rehydrate()
+    void loadWorkflowsFromBackend()
     setMounted(true)
-  }, [])
+  }, [loadWorkflowsFromBackend])
 
   const filteredWorkflows = workflows.filter(
     (w) =>

@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 import { useWorkflowStore } from '@/lib/workflow/store'
 import { NODE_TYPES, type ConfigField, type NodeCategory } from '@/lib/workflow/types'
 import { useI18n } from '@/lib/i18n'
-import { X, Trash2, Settings, Play, Code, Info, Copy, Check, AlertCircle, KeyRound } from 'lucide-react'
+import { X, Trash2, Settings, Play, Code, Info, Copy, Check, AlertCircle, KeyRound, ClipboardList, ArrowRight } from 'lucide-react'
 
 const categoryStyles: Record<NodeCategory, { bg: string; text: string; border: string }> = {
   trigger: { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30' },
@@ -71,6 +71,94 @@ const connectionNodeTypes = new Set([
   'redis',
 ])
 
+interface NodeGuide {
+  purpose: string
+  configure: string[]
+  data: string[]
+  nextStep: string
+}
+
+const nodeGuides: Record<string, NodeGuide> = {
+  'webhook-trigger': {
+    purpose: 'Receives data from an external form, app, or test payload and starts the workflow.',
+    configure: [
+      'Set the HTTP method and path that identify this webhook.',
+      'Use Example Payload to paste the JSON you expect to receive, so the next nodes are easier to configure.',
+      'For a welcome email, include user.email and user.name in the payload.',
+    ],
+    data: ['The next node receives the webhook output as input.data.', 'Example: {{input.data.user.email}} reads the email from the sample payload.'],
+    nextStep: 'Connect this trigger to an action node, then use fields from input.data in that action.',
+  },
+  'send-email': {
+    purpose: 'Builds an email from the incoming data and sends it through a real email provider when credentials are available.',
+    configure: [
+      'Set From Email to the sender address you want recipients to see.',
+      'Set To to a fixed email or to a value from the previous node, for example {{input.data.user.email}}.',
+      'Write the Subject and Body. HTML format lets you use tags like <p> and <strong>.',
+      'Leave Attachments as [] unless another node provides files.',
+    ],
+    data: ['Use {{input.data.user.name}} for the user name in the welcome template.', 'Use {{input.data.user.email}} for the recipient address.'],
+    nextStep: 'Before running in production, connect real email credentials or an email API backend for this node.',
+  },
+  delay: {
+    purpose: 'Waits before continuing to the next node.',
+    configure: ['For a simple pause, keep Resume as After Time Interval and set Seconds.', 'One day is 86400 seconds.'],
+    data: ['The data passes through unchanged after the wait.'],
+    nextStep: 'Connect it before the follow-up action that should happen later.',
+  },
+  'http-request': {
+    purpose: 'Calls an external API and passes the response to the next node.',
+    configure: ['Choose the HTTP method, paste the URL, then enable query parameters, headers, or body only when the API needs them.', 'Add credentials in Connection if the API is private.'],
+    data: ['The response is available to the next node as input.data.'],
+    nextStep: 'Run once, inspect Output, then map the returned fields in the next node.',
+  },
+  code: {
+    purpose: 'Runs JavaScript to reshape or calculate data.',
+    configure: ['Read the incoming data from input.', 'Return the exact object or array the next node should receive.'],
+    data: ['Example: return { email: input.data.user.email, name: input.data.user.name };'],
+    nextStep: 'Run the workflow and check Output to confirm the returned shape.',
+  },
+  set: {
+    purpose: 'Creates or updates fields without writing JavaScript.',
+    configure: ['Add fields in Fields to Set as JSON.', 'Keep Include Other Input Fields enabled when you want to preserve the original data.'],
+    data: ['Example: {"fullName":"{{input.firstName}} {{input.lastName}}"}'],
+    nextStep: 'Use this before actions that need clean field names.',
+  },
+}
+
+const categoryGuides: Record<NodeCategory, NodeGuide> = {
+  trigger: {
+    purpose: 'Starts the workflow and creates the first data object.',
+    configure: ['Configure when or how the workflow should start.', 'Add test data when the node supports it.'],
+    data: ['Trigger nodes do not need an input node.'],
+    nextStep: 'Connect it to the first action or transform node.',
+  },
+  action: {
+    purpose: 'Does work in an external service or creates a side effect.',
+    configure: ['Fill required fields first.', 'Use values from the previous node with template expressions when needed.'],
+    data: ['Incoming data is available as input in code fields and template examples.'],
+    nextStep: 'Run the previous nodes, inspect Output, then map the fields you need.',
+  },
+  logic: {
+    purpose: 'Chooses which path the workflow should follow.',
+    configure: ['Define the condition, expression, or route rules.', 'Connect each output handle to the node that should run for that path.'],
+    data: ['Logic nodes usually pass the original input down the matching path.'],
+    nextStep: 'Use the output labels on the canvas to wire each branch.',
+  },
+  transform: {
+    purpose: 'Changes the shape of the incoming data before another node uses it.',
+    configure: ['Choose the operation and define the fields, mapping, or code.', 'Keep the output small and explicit when the next node only needs a few fields.'],
+    data: ['The next node receives this transformed result as input.'],
+    nextStep: 'Check Output after running to verify the new data shape.',
+  },
+  utility: {
+    purpose: 'Controls workflow behavior without usually changing the data.',
+    configure: ['Set the control option this utility needs.', 'Most utility nodes pass data through unchanged.'],
+    data: ['The next node normally receives the same input.'],
+    nextStep: 'Place it between the nodes whose timing or behavior you want to control.',
+  },
+}
+
 interface NodePanelProps {
   className?: string
 }
@@ -84,6 +172,7 @@ export function NodePanel({ className }: NodePanelProps) {
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const setSelectedNode = useWorkflowStore((s) => s.setSelectedNode)
   const currentExecution = useWorkflowStore((s) => s.currentExecution)
+  const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
 
   const node = selectedNodeId ? getNode(selectedNodeId) : null
   const nodeType = node ? NODE_TYPES[node.type] : null
@@ -349,6 +438,20 @@ export function NodePanel({ className }: NodePanelProps) {
   const hasConfigFields = nodeType.configSchema.length > 0
   const hasConnectionFields = connectionNodeTypes.has(node.type)
   const allConfigFields = hasConnectionFields ? [...connectionFields, ...nodeType.configSchema] : nodeType.configSchema
+  const guide = nodeGuides[node.type] || categoryGuides[nodeType.category]
+  const requiredFields = allConfigFields.filter((field) => field.required)
+  const missingRequiredFields = requiredFields.filter((field) => {
+    const value = localConfig[field.key] ?? field.defaultValue
+    return value === undefined || value === null || (typeof value === 'string' && value.trim() === '')
+  })
+  const incomingNodes = workflow?.edges
+    .filter((edge) => edge.target === node.id)
+    .map((edge) => workflow.nodes.find((workflowNode) => workflowNode.id === edge.source))
+    .filter(Boolean) || []
+  const outgoingNodes = workflow?.edges
+    .filter((edge) => edge.source === node.id)
+    .map((edge) => workflow.nodes.find((workflowNode) => workflowNode.id === edge.target))
+    .filter(Boolean) || []
 
   return (
     <div className={cn('flex flex-col h-full bg-sidebar border-l border-sidebar-border', className)}>
@@ -384,6 +487,86 @@ export function NodePanel({ className }: NodePanelProps) {
         <div className="flex-1 min-h-0 overflow-hidden">
           <ScrollArea className="h-full">
             <TabsContent value="config" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
+            <div className="rounded-lg border border-border bg-card/60 p-3 space-y-3">
+              <div className="flex items-start gap-2">
+                <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('setupGuide')}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    {tt(guide.purpose)}
+                  </p>
+                </div>
+              </div>
+
+              {requiredFields.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {requiredFields.map((field) => {
+                    const missing = missingRequiredFields.some((missingField) => missingField.key === field.key)
+                    return (
+                      <Badge
+                        key={field.key}
+                        variant="outline"
+                        className={cn(
+                          'text-[10px]',
+                          missing ? 'border-amber-500/40 text-amber-400' : 'border-green-500/40 text-green-400'
+                        )}
+                      >
+                        {missing ? t('missing') : t('ready')}: {tt(field.label)}
+                      </Badge>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground">{t('whatToConfigure')}</p>
+                <ul className="space-y-1.5">
+                  {guide.configure.map((item) => (
+                    <li key={item} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/70" />
+                      <span>{tt(item)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="rounded-md border border-dashed border-border p-2">
+                <p className="text-xs font-medium text-foreground">{t('dataAvailable')}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  {incomingNodes.length > 0 ? (
+                    incomingNodes.map((incoming, index) => (
+                      <Badge key={`incoming-${incoming!.id}-${index}`} variant="secondary" className="text-[10px]">
+                        {tt(incoming!.data.label)}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span>{t('noInputs')}</span>
+                  )}
+                  {outgoingNodes.length > 0 && (
+                    <>
+                      <ArrowRight className="h-3 w-3" />
+                      {outgoingNodes.map((outgoing, index) => (
+                        <Badge key={`outgoing-${outgoing!.id}-${index}`} variant="outline" className="text-[10px]">
+                          {tt(outgoing!.data.label)}
+                        </Badge>
+                      ))}
+                    </>
+                  )}
+                </div>
+                <ul className="mt-2 space-y-1">
+                  {guide.data.map((item) => (
+                    <li key={item} className="text-xs leading-relaxed text-muted-foreground">
+                      {tt(item)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground">{t('nextStep')}:</span> {tt(guide.nextStep)}
+              </p>
+            </div>
+
             {/* Label */}
             <div className="space-y-2">
               <Label htmlFor="node-label" className="text-sm text-foreground">

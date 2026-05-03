@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowExecution, NodeExecutionResult, ExecutionStatus, GlobalVariable } from './types'
 import { v4 as uuid } from 'uuid'
+import { createBackendWorkflow, deleteBackendWorkflow, fetchBackendExecutions, fetchBackendWorkflows, saveBackendWorkflow } from './api-client'
 
 // Safe localStorage that works on both server and client
 const safeStorage = {
@@ -62,6 +63,9 @@ interface WorkflowState {
   deleteWorkflow: (id: string) => void
   duplicateWorkflow: (id: string) => string
   setActiveWorkflow: (id: string | null) => void
+  loadWorkflowsFromBackend: () => Promise<void>
+  saveWorkflowToBackend: (id: string) => Promise<void>
+  loadExecutionsFromBackend: (workflowId: string) => Promise<void>
   
   // Actions - Nodes
   addNode: (node: Omit<WorkflowNode, 'id'>) => string
@@ -79,6 +83,7 @@ interface WorkflowState {
   startExecution: (workflowId: string) => string
   updateNodeExecution: (executionId: string, nodeId: string, result: Partial<NodeExecutionResult>) => void
   completeExecution: (executionId: string, status: ExecutionStatus, error?: string) => void
+  recordExecution: (execution: WorkflowExecution) => void
   clearExecutionHistory: () => void
   
   // Actions - Clipboard
@@ -322,15 +327,21 @@ export const useWorkflowStore = create<WorkflowState>()(
           updatedAt: new Date().toISOString(),
         }
         set((state) => ({ workflows: [...state.workflows, workflow] }))
+        void createBackendWorkflow(workflow).catch(() => undefined)
         return id
       },
 
       updateWorkflow: (id, updates) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
-            w.id === id ? { ...w, ...updates, updatedAt: new Date().toISOString() } : w
-          ),
-        }))
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) => {
+            if (w.id !== id) return w
+            updatedWorkflow = { ...w, ...updates, updatedAt: new Date().toISOString() }
+            return updatedWorkflow
+          })
+          return { workflows }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       deleteWorkflow: (id) => {
@@ -338,6 +349,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           workflows: state.workflows.filter((w) => w.id !== id),
           activeWorkflowId: state.activeWorkflowId === id ? null : state.activeWorkflowId,
         }))
+        void deleteBackendWorkflow(id).catch(() => undefined)
       },
 
       duplicateWorkflow: (id) => {
@@ -352,6 +364,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           updatedAt: new Date().toISOString(),
         }
         set((state) => ({ workflows: [...state.workflows, duplicate] }))
+        void createBackendWorkflow(duplicate).catch(() => undefined)
         return newId
       },
 
@@ -359,59 +372,94 @@ export const useWorkflowStore = create<WorkflowState>()(
         set({ activeWorkflowId: id, selectedNodeId: null })
       },
 
+      loadWorkflowsFromBackend: async () => {
+        try {
+          const workflows = await fetchBackendWorkflows()
+          if (workflows.length > 0) {
+            set({ workflows })
+          }
+        } catch {
+          // Keep localStorage workflows when the database is not configured yet.
+        }
+      },
+
+      saveWorkflowToBackend: async (id) => {
+        const workflow = get().workflows.find((w) => w.id === id)
+        if (!workflow) return
+        await saveBackendWorkflow(workflow)
+      },
+
+      loadExecutionsFromBackend: async (workflowId) => {
+        try {
+          const executions = await fetchBackendExecutions(workflowId)
+          set({ executionHistory: executions })
+        } catch {
+          // Keep local execution history when the database is not configured yet.
+        }
+      },
+
       // Node actions
       addNode: (node) => {
         const id = `node-${uuid()}`
         const newNode: WorkflowNode = { ...node, id }
+        let updatedWorkflow: Workflow | null = null
         set((state) => {
           const workflow = state.workflows.find((w) => w.id === state.activeWorkflowId)
           if (!workflow) return state
           return {
             workflows: state.workflows.map((w) =>
               w.id === state.activeWorkflowId
-                ? { ...w, nodes: [...w.nodes, newNode], updatedAt: new Date().toISOString() }
+                ? (updatedWorkflow = { ...w, nodes: [...w.nodes, newNode], updatedAt: new Date().toISOString() })
                 : w
             ),
           }
         })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
         return id
       },
 
       updateNode: (nodeId, updates) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) =>
             w.id === state.activeWorkflowId
-              ? {
+              ? (updatedWorkflow = {
                   ...w,
                   nodes: w.nodes.map((n) => (n.id === nodeId ? { ...n, ...updates } : n)),
                   updatedAt: new Date().toISOString(),
-                }
+                })
               : w
-          ),
-        }))
+          )
+          return { workflows }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       updateNodeData: (nodeId, data) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) =>
             w.id === state.activeWorkflowId
-              ? {
+              ? (updatedWorkflow = {
                   ...w,
                   nodes: w.nodes.map((n) =>
                     n.id === nodeId ? { ...n, data: { ...n.data, ...data } } : n
                   ),
                   updatedAt: new Date().toISOString(),
-                }
+                })
               : w
-          ),
-        }))
+          )
+          return { workflows }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       updateNodeConfig: (nodeId, config) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) =>
             w.id === state.activeWorkflowId
-              ? {
+              ? (updatedWorkflow = {
                   ...w,
                   nodes: w.nodes.map((n) =>
                     n.id === nodeId
@@ -419,26 +467,33 @@ export const useWorkflowStore = create<WorkflowState>()(
                       : n
                   ),
                   updatedAt: new Date().toISOString(),
-                }
+                })
               : w
-          ),
-        }))
+          )
+          return { workflows }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       deleteNode: (nodeId) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) =>
             w.id === state.activeWorkflowId
-              ? {
+              ? (updatedWorkflow = {
                   ...w,
                   nodes: w.nodes.filter((n) => n.id !== nodeId),
                   edges: w.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
                   updatedAt: new Date().toISOString(),
-                }
+                })
               : w
-          ),
-          selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
-        }))
+          )
+          return {
+            workflows,
+            selectedNodeId: state.selectedNodeId === nodeId ? null : state.selectedNodeId,
+          }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       setSelectedNode: (nodeId) => {
@@ -448,23 +503,29 @@ export const useWorkflowStore = create<WorkflowState>()(
       // Edge actions
       addEdge: (edge) => {
         const id = `edge-${uuid()}`
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) =>
             w.id === state.activeWorkflowId
-              ? { ...w, edges: [...w.edges, { ...edge, id }], updatedAt: new Date().toISOString() }
+              ? (updatedWorkflow = { ...w, edges: [...w.edges, { ...edge, id }], updatedAt: new Date().toISOString() })
               : w
-          ),
-        }))
+          )
+          return { workflows }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       deleteEdge: (edgeId) => {
-        set((state) => ({
-          workflows: state.workflows.map((w) =>
+        let updatedWorkflow: Workflow | null = null
+        set((state) => {
+          const workflows = state.workflows.map((w) =>
             w.id === state.activeWorkflowId
-              ? { ...w, edges: w.edges.filter((e) => e.id !== edgeId), updatedAt: new Date().toISOString() }
+              ? (updatedWorkflow = { ...w, edges: w.edges.filter((e) => e.id !== edgeId), updatedAt: new Date().toISOString() })
               : w
-          ),
-        }))
+          )
+          return { workflows }
+        })
+        if (updatedWorkflow) void saveBackendWorkflow(updatedWorkflow).catch(() => undefined)
       },
 
       // Execution actions
@@ -513,6 +574,13 @@ export const useWorkflowStore = create<WorkflowState>()(
             executionHistory: [completed, ...state.executionHistory].slice(0, 50),
           }
         })
+      },
+
+      recordExecution: (execution) => {
+        set((state) => ({
+          currentExecution: null,
+          executionHistory: [execution, ...state.executionHistory.filter((item) => item.id !== execution.id)].slice(0, 50),
+        }))
       },
 
       clearExecutionHistory: () => {
@@ -653,6 +721,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           updatedAt: new Date().toISOString(),
         }
         set((state) => ({ workflows: [...state.workflows, imported] }))
+        void createBackendWorkflow(imported).catch(() => undefined)
       },
 
       exportWorkflow: (id) => {

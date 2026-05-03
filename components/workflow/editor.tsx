@@ -14,7 +14,7 @@ import { ExecutionHistory } from './execution-history'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useWorkflowStore } from '@/lib/workflow/store'
-import { executeWorkflow } from '@/lib/workflow/engine'
+import { executeBackendWorkflow } from '@/lib/workflow/api-client'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
@@ -34,15 +34,18 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
   const setActiveWorkflow = useWorkflowStore((s) => s.setActiveWorkflow)
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const startExecution = useWorkflowStore((s) => s.startExecution)
-  const updateNodeExecution = useWorkflowStore((s) => s.updateNodeExecution)
   const completeExecution = useWorkflowStore((s) => s.completeExecution)
+  const recordExecution = useWorkflowStore((s) => s.recordExecution)
+  const saveWorkflowToBackend = useWorkflowStore((s) => s.saveWorkflowToBackend)
+  const loadExecutionsFromBackend = useWorkflowStore((s) => s.loadExecutionsFromBackend)
 
   // Set active workflow on mount and rehydrate store
   useEffect(() => {
     // Rehydrate zustand store on client
     useWorkflowStore.persist.rehydrate()
     setActiveWorkflow(workflowId)
-  }, [workflowId, setActiveWorkflow])
+    void loadExecutionsFromBackend(workflowId)
+  }, [workflowId, setActiveWorkflow, loadExecutionsFromBackend])
 
   const handleExecute = useCallback(async () => {
     if (!workflow || isExecuting) return
@@ -51,39 +54,15 @@ export function WorkflowEditor({ workflowId }: WorkflowEditorProps) {
     const executionId = startExecution(workflow.id)
 
     try {
-      await executeWorkflow(workflow, {
-        onNodeStart: (nodeId) => {
-          updateNodeExecution(executionId, nodeId, {
-            nodeId,
-            status: 'running',
-            input: null,
-            output: null,
-            startTime: new Date().toISOString(),
-          })
-        },
-        onNodeComplete: (nodeId, result) => {
-          updateNodeExecution(executionId, nodeId, {
-            status: 'success',
-            output: result.output,
-            endTime: new Date().toISOString(),
-            duration: result.duration,
-          })
-        },
-        onNodeError: (nodeId, error) => {
-          updateNodeExecution(executionId, nodeId, {
-            status: 'error',
-            error: error.message,
-            endTime: new Date().toISOString(),
-          })
-        },
-      })
-      completeExecution(executionId, 'success')
+      await saveWorkflowToBackend(workflow.id)
+      const execution = await executeBackendWorkflow(workflow.id)
+      recordExecution(execution)
     } catch (error) {
       completeExecution(executionId, 'error', (error as Error).message)
     } finally {
       setIsExecuting(false)
     }
-  }, [workflow, isExecuting, startExecution, updateNodeExecution, completeExecution])
+  }, [workflow, isExecuting, startExecution, completeExecution, recordExecution, saveWorkflowToBackend])
 
   return (
     <ReactFlowProvider>
