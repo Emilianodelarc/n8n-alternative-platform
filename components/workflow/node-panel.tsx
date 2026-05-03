@@ -292,6 +292,35 @@ export function NodePanel({ className }: NodePanelProps) {
     updateNodeConfig(selectedNodeId!, { [key]: value })
   }, [localConfig, selectedNodeId, updateNodeConfig, validateField])
 
+  const insertExpressionIntoField = useCallback((
+    field: ConfigField,
+    target: HTMLInputElement | HTMLTextAreaElement,
+    expression: string
+  ) => {
+    const currentValue = String(localConfig[field.key] ?? field.defaultValue ?? '')
+    const selectionStart = target.selectionStart ?? currentValue.length
+    const selectionEnd = target.selectionEnd ?? selectionStart
+    const nextValue = `${currentValue.slice(0, selectionStart)}${expression}${currentValue.slice(selectionEnd)}`
+    handleConfigChange(field.key, nextValue, field)
+
+    requestAnimationFrame(() => {
+      const cursor = selectionStart + expression.length
+      target.focus()
+      target.setSelectionRange(cursor, cursor)
+    })
+  }, [handleConfigChange, localConfig])
+
+  const handleExpressionDrop = useCallback((
+    event: React.DragEvent<HTMLInputElement | HTMLTextAreaElement>,
+    field: ConfigField
+  ) => {
+    const expression = event.dataTransfer.getData('text/plain')
+    if (!expression.includes('{{')) return
+
+    event.preventDefault()
+    insertExpressionIntoField(field, event.currentTarget, expression)
+  }, [insertExpressionIntoField])
+
   const handleLabelChange = useCallback((label: string) => {
     updateNodeData(selectedNodeId!, { label })
   }, [selectedNodeId, updateNodeData])
@@ -347,6 +376,8 @@ export function NodePanel({ className }: NodePanelProps) {
               type={field.type === 'password' ? 'password' : 'text'}
               value={value as string}
               onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleExpressionDrop(e, field)}
               placeholder={placeholder}
               className={cn('bg-input border-border', error && 'border-destructive')}
             />
@@ -366,6 +397,8 @@ export function NodePanel({ className }: NodePanelProps) {
               id={field.key}
               value={value as string}
               onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleExpressionDrop(e, field)}
               placeholder={placeholder}
               className={cn('min-h-[80px] bg-input border-border resize-y', error && 'border-destructive')}
             />
@@ -386,6 +419,8 @@ export function NodePanel({ className }: NodePanelProps) {
                 id={field.key}
                 value={value as string}
                 onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleExpressionDrop(e, field)}
                 placeholder={placeholder}
                 className={cn(
                   'min-h-[100px] font-mono text-sm bg-input border-border resize-y',
@@ -419,6 +454,8 @@ export function NodePanel({ className }: NodePanelProps) {
                 id={field.key}
                 value={displayCode}
                 onChange={(e) => handleConfigChange(field.key, e.target.value, field)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => handleExpressionDrop(e, field)}
                 placeholder={placeholder || t('codePlaceholder')}
                 className={cn(
                   'min-h-[150px] font-mono text-sm bg-zinc-900 border-border resize-y',
@@ -544,6 +581,11 @@ export function NodePanel({ className }: NodePanelProps) {
     void navigator.clipboard.writeText(expression)
   }
 
+  const startExpressionDrag = (event: React.DragEvent, expression: string) => {
+    event.dataTransfer.setData('text/plain', expression)
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+
   return (
     <div className={cn('flex flex-col h-full bg-sidebar border-l border-sidebar-border', className)}>
       {/* Header */}
@@ -654,30 +696,32 @@ export function NodePanel({ className }: NodePanelProps) {
               </div>
 
               {expressionSuggestions.length > 0 && (
-                <div className="rounded-md border border-border bg-background/40 p-2">
-                  <p className="text-xs font-medium text-foreground">Expresiones disponibles</p>
-                  <div className="mt-2 space-y-1.5">
+                <div className="rounded-md border border-violet-500/30 bg-violet-500/10 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">Mapper</p>
+                    <span className="text-[10px] text-muted-foreground">Drag or click</span>
+                  </div>
+                  <div className="mt-2 flex max-h-48 flex-wrap gap-1.5 overflow-auto pr-1">
                     {expressionSuggestions.map((suggestion) => (
                       <button
                         key={`${suggestion.label}-${suggestion.expression}`}
                         type="button"
-                        className="flex w-full items-center justify-between gap-2 rounded border border-border bg-muted/40 px-2 py-1.5 text-left hover:bg-muted"
+                        draggable
+                        className="inline-flex max-w-full cursor-grab items-center gap-1.5 rounded border border-violet-500/30 bg-background px-2 py-1.5 text-left shadow-sm transition-colors hover:border-violet-500/60 hover:bg-violet-500/10 active:cursor-grabbing"
                         onClick={() => copyExpression(suggestion.expression)}
+                        onDragStart={(event) => startExpressionDrag(event, suggestion.expression)}
+                        title={suggestion.expression}
                       >
-                        <span className="min-w-0">
-                          <code className="block truncate text-[11px] text-primary">{suggestion.expression}</code>
-                          {suggestion.value !== undefined && (
-                            <span className="block truncate text-[10px] text-muted-foreground">
-                              {summarizeValue(suggestion.value)}
-                            </span>
-                          )}
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+                        <span className="min-w-0 truncate text-[11px] font-medium text-foreground">
+                          {suggestion.label}
                         </span>
-                        <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <Copy className="h-3 w-3 shrink-0 text-muted-foreground" />
                       </button>
                     ))}
                   </div>
                   <p className="mt-2 text-[10px] text-muted-foreground">
-                    Click para copiar y pegar en To, Subject, Body u otros campos.
+                    Arrastra un token al campo que quieras mapear, o haz click para copiarlo.
                   </p>
                 </div>
               )}

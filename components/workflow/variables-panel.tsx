@@ -75,6 +75,11 @@ export function VariablesPanel() {
     return String(variable.value)
   }
 
+  const handleVariableDragStart = (event: React.DragEvent, variable: GlobalVariable) => {
+    event.dataTransfer.setData('text/plain', `{{variables.${variable.name}}}`)
+    event.dataTransfer.effectAllowed = 'copy'
+  }
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -184,10 +189,13 @@ export function VariablesPanel() {
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <code className="text-sm font-semibold text-primary">
-                        ${'{'}
-                        {variable.name}
-                        {'}'}
+                      <code
+                        draggable
+                        onDragStart={(event) => handleVariableDragStart(event, variable)}
+                        className="cursor-grab rounded border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-semibold text-primary active:cursor-grabbing"
+                        title="Arrastra esta variable a un campo del nodo"
+                      >
+                        {`{{variables.${variable.name}}}`}
                       </code>
                       <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                         {variable.type}
@@ -220,7 +228,7 @@ export function VariablesPanel() {
       <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
         <p className="font-medium">{t('usageInNodes')}</p>
         <code className="block p-2 bg-muted rounded text-xs">
-          {'${{variableName}}'} {t('or')} variables.variableName
+          {'{{variables.variableName}}'}
         </code>
       </div>
     </div>
