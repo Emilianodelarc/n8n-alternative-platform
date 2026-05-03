@@ -34,6 +34,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   const { t } = useI18n()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null)
+  const isDraggingNode = useRef(false)
 
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -49,6 +50,8 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
 
   // Sync store changes to local state
   useEffect(() => {
+    if (isDraggingNode.current) return
+
     if (!workflow) {
       setNodes([])
       setEdges([])
@@ -130,10 +133,15 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
 
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      isDraggingNode.current = false
       updateNode(node.id, { position: node.position })
     },
     [updateNode]
   )
+
+  const onNodeDragStart = useCallback(() => {
+    isDraggingNode.current = true
+  }, [])
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
@@ -194,6 +202,7 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
         onPaneClick={onPaneClick}
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
+        onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onDragOver={onDragOver}
         onDrop={onDrop}
