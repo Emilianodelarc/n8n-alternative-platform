@@ -11,8 +11,18 @@ const DEFAULT_GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/presentations',
 ]
 
+const DEFAULT_APP_URL = 'https://dhautomation.vercel.app'
+
 function getBaseUrl(request: NextRequest) {
-  return process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+  return (
+    process.env.GOOGLE_OAUTH_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined) ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
+    request.nextUrl.origin ||
+    DEFAULT_APP_URL
+  )
 }
 
 export async function GET(request: NextRequest) {
