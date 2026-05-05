@@ -1102,7 +1102,6 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     color: '#34a853',
     defaultConfig: {
       credentialId: '',
-      resource: 'sheet',
       inputSource: 'id',
       spreadsheetId: '',
       fileUrl: '',
@@ -1118,16 +1117,6 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     },
     configSchema: [
       credentialField,
-      {
-        key: 'resource',
-        label: 'Resource',
-        type: 'select',
-        options: [
-          { label: 'Document', value: 'document' },
-          { label: 'Sheet Within Document', value: 'sheet' },
-          { label: 'Row', value: 'row' },
-        ],
-      },
       {
         key: 'inputSource',
         label: 'Read Source',

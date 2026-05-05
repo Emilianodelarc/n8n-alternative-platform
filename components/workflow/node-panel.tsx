@@ -128,6 +128,19 @@ const nodeGuides: Record<string, NodeGuide> = {
     data: ['Example: {"fullName":"{{input.firstName}} {{input.lastName}}"}'],
     nextStep: 'Use this before actions that need clean field names.',
   },
+  'google-sheets': {
+    purpose: 'Reads spreadsheets/files from Google or writes rows and ranges into Google Sheets.',
+    configure: [
+      'Choose the Operation first. The panel only shows the fields required for that specific action.',
+      'Use Read Sheet / File when you want to inspect a Google Sheet, CSV, or XLSX from a link or from incoming input.',
+      'Use Create Spreadsheet for a brand-new document, Create Sheet Tab for a new tab inside an existing spreadsheet, and Add Row(s) when you want to append tabular data.',
+    ],
+    data: [
+      'For Add Row(s), use Columns / Mapping when the previous node returns objects, or Values when you already have a 2D array.',
+      'For Read Sheet / File, the output can include rows/records for CSV and workbook data for XLSX files.',
+    ],
+    nextStep: 'Pick the operation, fill only the fields now shown, run once, and inspect Output to confirm the resulting JSON shape.',
+  },
 }
 
 const categoryGuides: Record<NodeCategory, NodeGuide> = {
