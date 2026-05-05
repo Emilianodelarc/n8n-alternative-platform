@@ -149,15 +149,15 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'relative min-w-[190px] overflow-hidden rounded-md border bg-card shadow-sm transition-all hover:shadow-md',
+        'relative min-w-[180px] rounded-lg border-2 bg-card shadow-lg transition-all',
+        categoryColors[category],
         selected && categoryBorderColors[category],
-        !selected && 'border-border',
+        !selected && 'border-border/50',
         isRunning && 'ring-2 ring-amber-500 ring-offset-2 ring-offset-background animate-pulse',
         isSuccess && 'ring-2 ring-green-500 ring-offset-2 ring-offset-background',
         isError && 'ring-2 ring-red-500 ring-offset-2 ring-offset-background'
       )}
     >
-      <div className={cn('absolute inset-y-0 left-0 w-1', categoryColors[category])} />
       {/* Input handles */}
       {inputs.map((input, index) => (
         <Handle
@@ -173,17 +173,17 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
       ))}
 
       {/* Node content */}
-      <div className="p-3 pl-4">
+      <div className="p-3">
         <div className="flex items-center gap-2">
-          <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md border', categoryColors[category], categoryBorderColors[category])}>
-            <Icon className={cn('h-4 w-4', categoryIconColors[category])} />
+          <div className={cn('p-1.5 rounded-md', categoryColors[category])}>
+            <Icon className={cn('w-4 h-4', categoryIconColors[category])} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-semibold leading-tight text-foreground">
+            <p className="text-sm font-medium text-foreground truncate">
               {tt(nodeData.label || nodeType?.label || '')}
             </p>
             {nodeType?.description && (
-              <p className="truncate text-[11px] leading-tight text-muted-foreground">
+              <p className="text-xs text-muted-foreground truncate">
                 {tt(nodeType.description)}
               </p>
             )}
@@ -193,7 +193,7 @@ function BaseNodeComponent({ id, data, type, selected }: NodeProps) {
         {/* Execution status */}
         {nodeResult && (
           <div className={cn(
-            'mt-2 rounded border px-2 py-1 text-xs font-medium',
+            'mt-2 px-2 py-1 rounded text-xs font-medium',
             isRunning && 'bg-amber-500/20 text-amber-400',
             isSuccess && 'bg-green-500/20 text-green-400',
             isError && 'bg-red-500/20 text-red-400'

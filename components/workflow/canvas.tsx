@@ -14,7 +14,6 @@ import {
   type Node,
   type ReactFlowInstance,
   BackgroundVariant,
-  type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useWorkflowStore } from '@/lib/workflow/store'
@@ -25,7 +24,7 @@ import { useI18n } from '@/lib/i18n'
 
 type WorkflowFlowNode = Node<Record<string, unknown>>
 
-const edgeStroke = '#3b82f6'
+const edgeStroke = '#2563eb'
 
 interface WorkflowCanvasProps {
   className?: string
@@ -35,7 +34,6 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   const { t } = useI18n()
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const reactFlowInstance = useRef<ReactFlowInstance | null>(null)
-  const isDraggingNode = useRef(false)
 
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -50,8 +48,6 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   useEffect(() => {
-    if (isDraggingNode.current) return
-
     if (!workflow) {
       setNodes([])
       setEdges([])
@@ -92,13 +88,6 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
     )
   }, [workflow, selectedNodeId, setNodes, setEdges])
 
-  const onNodesChangeHandler = useCallback(
-    (changes: NodeChange<WorkflowFlowNode>[]) => {
-      onNodesChange(changes)
-    },
-    [onNodesChange]
-  )
-
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source && connection.target) {
@@ -138,13 +127,8 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
     [deleteEdge]
   )
 
-  const onNodeDragStart = useCallback(() => {
-    isDraggingNode.current = true
-  }, [])
-
   const onNodeDragStop = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      isDraggingNode.current = false
       updateNode(node.id, { position: node.position })
     },
     [updateNode]
@@ -160,20 +144,17 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       event.preventDefault()
 
       const data = event.dataTransfer.getData('application/reactflow')
-      if (!data || !reactFlowInstance.current) return
+      if (!data || !reactFlowInstance.current || !reactFlowWrapper.current) return
 
-      const { type, label, category } = JSON.parse(data) as {
-        type: string
-        label: string
-        category: NodeCategory
-      }
+      const { type, label, category } = JSON.parse(data) as { type: string; label: string; category: NodeCategory }
 
       const nodeTypeDef = NODE_TYPES[type]
       if (!nodeTypeDef) return
 
+      const bounds = reactFlowWrapper.current.getBoundingClientRect()
       const position = reactFlowInstance.current.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top,
       })
 
       addNode({
@@ -195,40 +176,30 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
 
   if (!workflow) {
     return (
-      <div className={cn('flex h-full items-center justify-center bg-background', className)}>
+      <div className={cn('flex items-center justify-center h-full bg-background', className)}>
         <p className="text-muted-foreground">{t('noWorkflowSelected')}</p>
       </div>
     )
   }
 
   return (
-    <div ref={reactFlowWrapper} className={cn('h-full w-full overflow-hidden', className)}>
+    <div ref={reactFlowWrapper} className={cn('h-full w-full', className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChangeHandler}
+        onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         onNodesDelete={onNodesDelete}
         onEdgesDelete={onEdgesDelete}
-        onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onDragOver={onDragOver}
         onDrop={onDrop}
         onInit={onInit}
         nodeTypes={nodeTypes}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        fitView={false}
-        minZoom={1}
-        maxZoom={1}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
-        zoomOnDoubleClick={false}
-        panOnScroll={false}
-        panOnDrag={false}
-        preventScrolling={true}
+        fitView
         snapToGrid
         snapGrid={[15, 15]}
         deleteKeyCode={['Backspace', 'Delete']}
@@ -237,18 +208,18 @@ export function WorkflowCanvas({ className }: WorkflowCanvasProps) {
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={24}
+          gap={20}
           size={1}
           color="var(--canvas-dot)"
         />
-
-        <Controls className="!rounded-md !border-border !bg-card !shadow-sm [&_button]:!border-border [&_button]:!bg-card [&_button]:!text-foreground [&_button:hover]:!bg-accent" />
+        <Controls
+          className="!bg-card !border-border !rounded-lg !shadow-lg [&_button]:!bg-card [&_button]:!border-border [&_button]:!text-foreground [&_button:hover]:!bg-accent"
+        />
 
         <MiniMap
-          className="!hidden !rounded-md !border-border !bg-card lg:!block"
+          className="!bg-card !border-border !rounded-lg"
           nodeColor={(node) => {
             const category = (node.data as { category?: NodeCategory })?.category
-
             switch (category) {
               case 'trigger':
                 return '#22c55e'
