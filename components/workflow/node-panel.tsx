@@ -49,12 +49,6 @@ const connectionFields: ConfigField[] = [
 
 const connectionNodeTypes = new Set([
   'http-request',
-  'google-sheets',
-  'google-drive',
-  'google-docs',
-  'google-slides',
-  'gmail',
-  'google-calendar',
   'slack-message',
   'discord',
   'telegram',
@@ -70,6 +64,16 @@ const connectionNodeTypes = new Set([
   'mongodb',
   'redis',
 ])
+
+function fieldIsVisible(field: ConfigField, config: Record<string, unknown>) {
+  if (!field.visibleWhen) return true
+
+  return Object.entries(field.visibleWhen).every(([dependencyKey, expected]) => {
+    const currentValue = config[dependencyKey]
+    if (Array.isArray(expected)) return expected.includes(currentValue)
+    return currentValue === expected
+  })
+}
 
 interface NodeGuide {
   purpose: string
@@ -617,7 +621,8 @@ export function NodePanel({ className }: NodePanelProps) {
 
   const hasConfigFields = nodeType.configSchema.length > 0
   const hasConnectionFields = connectionNodeTypes.has(node.type)
-  const allConfigFields = hasConnectionFields ? [...connectionFields, ...nodeType.configSchema] : nodeType.configSchema
+  const allConfigFields = (hasConnectionFields ? [...connectionFields, ...nodeType.configSchema] : nodeType.configSchema)
+    .filter((field) => fieldIsVisible(field, localConfig))
   const guide = nodeGuides[node.type] || categoryGuides[nodeType.category]
   const requiredFields = allConfigFields.filter((field) => field.required)
   const missingRequiredFields = requiredFields.filter((field) => {

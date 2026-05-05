@@ -484,6 +484,33 @@ function mapTabularRows(rows: unknown[][]) {
   }
 }
 
+function normalizeSheetValuesFromConfig(values: unknown, columns: unknown, input: unknown) {
+  if (typeof values === 'string' && values.trim() !== '') {
+    return parseJsonConfig(values, []) as unknown[][]
+  }
+
+  if (typeof columns === 'string' && columns.trim() !== '') {
+    const parsedColumns = parseJsonConfig(columns, {}) as Record<string, unknown>
+    const headers = Object.keys(parsedColumns)
+    const sourceRows = Array.isArray(input) ? input : [input]
+    const rows = sourceRows
+      .filter((row) => row && typeof row === 'object')
+      .map((row) =>
+        headers.map((header) => {
+          const mappedValue = parsedColumns[header]
+          if (typeof mappedValue === 'string') return mappedValue
+          return mappedValue ?? (row as Record<string, unknown>)[header] ?? ''
+        })
+      )
+
+    if (headers.length > 0 && rows.length > 0) {
+      return [headers, ...rows]
+    }
+  }
+
+  return []
+}
+
 function readSpreadsheetBuffer(data: ArrayBuffer) {
   const workbook = XLSX.read(Buffer.from(data), { type: 'buffer' })
   const sheetNames = workbook.SheetNames
@@ -910,12 +937,13 @@ async function executeNode(
     }
 
     case 'google-sheets': {
-      const { operation, spreadsheetId, title, range, values, sheets, sheetName, fileUrl, fileId, inputSource } = config as {
+      const { operation, spreadsheetId, title, range, values, columns, sheets, sheetName, fileUrl, fileId, inputSource } = config as {
         operation: string
         spreadsheetId: string
         title: string
         range: string
         values: string
+        columns?: string
         sheets?: string
         sheetName?: string
         fileUrl?: string
@@ -1010,6 +1038,7 @@ async function executeNode(
       }
 
       if (!resolvedSpreadsheetId) throw new Error('Spreadsheet ID, Google Sheets link, or file is required for this operation')
+      const normalizedValues = normalizeSheetValuesFromConfig(values, columns, input)
 
       if (operation === 'append') {
         return requestJson(
@@ -1017,7 +1046,7 @@ async function executeNode(
           {
             method: 'POST',
             headers,
-            body: JSON.stringify({ values: parseJsonConfig(values, []) }),
+            body: JSON.stringify({ values: normalizedValues }),
           }
         )
       }
@@ -1028,7 +1057,7 @@ async function executeNode(
           {
             method: 'PUT',
             headers,
-            body: JSON.stringify({ values: parseJsonConfig(values, []) }),
+            body: JSON.stringify({ values: normalizedValues }),
           }
         )
       }
