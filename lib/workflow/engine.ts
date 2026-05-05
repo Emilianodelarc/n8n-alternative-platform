@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx'
 import type { Workflow, WorkflowNode, WorkflowEdge } from './types'
 
 interface ExecutionCallbacks {
@@ -410,6 +411,98 @@ async function requestText(url: string, init: RequestInit): Promise<string> {
   return data
 }
 
+async function requestArrayBuffer(url: string, init: RequestInit): Promise<ArrayBuffer> {
+  const response = await fetch(url, init)
+  const data = await response.arrayBuffer()
+
+  if (!response.ok) {
+    const message = Buffer.from(data).toString('utf8')
+    throw new Error(`API request failed (${response.status}): ${message}`)
+  }
+
+  return data
+}
+
+function parseDelimitedText(content: string, delimiter: ',' | '\t') {
+  const rows: string[][] = []
+  let currentRow: string[] = []
+  let currentValue = ''
+  let inQuotes = false
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index]
+    const nextCharacter = content[index + 1]
+
+    if (character === '"') {
+      if (inQuotes && nextCharacter === '"') {
+        currentValue += '"'
+        index += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+
+    if (!inQuotes && character === delimiter) {
+      currentRow.push(currentValue)
+      currentValue = ''
+      continue
+    }
+
+    if (!inQuotes && (character === '\n' || character === '\r')) {
+      if (character === '\r' && nextCharacter === '\n') index += 1
+      currentRow.push(currentValue)
+      if (currentRow.some((cell) => cell !== '')) rows.push(currentRow)
+      currentRow = []
+      currentValue = ''
+      continue
+    }
+
+    currentValue += character
+  }
+
+  currentRow.push(currentValue)
+  if (currentRow.some((cell) => cell !== '')) rows.push(currentRow)
+
+  return rows
+}
+
+function mapTabularRows(rows: unknown[][]) {
+  const normalizedRows = rows.map((row) => row.map((cell) => (cell === undefined || cell === null ? '' : cell)))
+  const headerRow = normalizedRows[0]?.map((value, index) => {
+    const stringValue = String(value).trim()
+    return stringValue || `column_${index + 1}`
+  }) || []
+  const dataRows = normalizedRows.slice(1)
+
+  return {
+    headers: headerRow,
+    rows: dataRows,
+    records: dataRows.map((row) =>
+      Object.fromEntries(headerRow.map((header, index) => [header, row[index] ?? '']))
+    ),
+  }
+}
+
+function readSpreadsheetBuffer(data: ArrayBuffer) {
+  const workbook = XLSX.read(Buffer.from(data), { type: 'buffer' })
+  const sheetNames = workbook.SheetNames
+  const sheets = Object.fromEntries(
+    sheetNames.map((sheetName) => {
+      const worksheet = workbook.Sheets[sheetName]
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false }) as unknown[][]
+      return [sheetName, mapTabularRows(rows)]
+    })
+  )
+
+  return {
+    workbook: {
+      sheetNames,
+      sheets,
+    },
+  }
+}
+
 interface GoogleFileReference {
   id: string
   kind: 'drive-file' | 'drive-folder' | 'google-doc' | 'google-sheet' | 'google-slides' | 'unknown'
@@ -499,6 +592,23 @@ function getGoogleExportMime(reference: GoogleFileReference, outputFormat: strin
     return outputFormat === 'text' ? 'text/plain' : null
   }
   return null
+}
+
+function isSpreadsheetBinaryFile(metadata: Record<string, unknown>) {
+  const mimeType = String(metadata.mimeType || '')
+  const name = String(metadata.name || '').toLowerCase()
+  return (
+    mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    mimeType === 'application/vnd.ms-excel' ||
+    name.endsWith('.xlsx') ||
+    name.endsWith('.xls')
+  )
+}
+
+function isDelimitedTextFile(metadata: Record<string, unknown>) {
+  const mimeType = String(metadata.mimeType || '')
+  const name = String(metadata.name || '').toLowerCase()
+  return mimeType === 'text/csv' || mimeType === 'text/tab-separated-values' || name.endsWith('.csv') || name.endsWith('.tsv')
 }
 
 // Execute a single node
@@ -800,14 +910,22 @@ async function executeNode(
     }
 
     case 'google-sheets': {
-      const { operation, spreadsheetId, title, range, values, sheets } = config as {
+      const { operation, spreadsheetId, title, range, values, sheets, sheetName, fileUrl, fileId, inputSource } = config as {
         operation: string
         spreadsheetId: string
         title: string
         range: string
         values: string
         sheets?: string
+        sheetName?: string
+        fileUrl?: string
+        fileId?: string
+        inputSource?: string
       }
+      const googleReference = getGoogleReferenceFromConfig(
+        { inputSource, fileUrl, fileId },
+        input
+      )
 
       const headers = {
         ...await getGoogleCredentialHeaders(config, 'Google Sheets'),
@@ -827,11 +945,75 @@ async function executeNode(
         })
       }
 
-      if (!spreadsheetId) throw new Error('Spreadsheet ID is required for this operation')
+      if (operation === 'createSheet') {
+        if (!spreadsheetId) throw new Error('Spreadsheet ID is required to create a sheet tab')
+        const sheetTitles = (parseJsonConfig(sheets, []) as string[]).filter(Boolean)
+        if (sheetTitles.length === 0 && sheetName) sheetTitles.push(sheetName)
+        if (sheetTitles.length === 0 && title) sheetTitles.push(title)
+        if (sheetTitles.length === 0) throw new Error('At least one sheet tab name is required')
+        return requestJson(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            requests: sheetTitles.map((sheetTitle) => ({
+              addSheet: {
+                properties: {
+                  title: sheetTitle,
+                },
+              },
+            })),
+          }),
+        })
+      }
+
+      const resolvedSpreadsheetId = spreadsheetId || googleReference?.id || ''
+
+      if (operation === 'read' && googleReference && googleReference.kind !== 'google-sheet' && !spreadsheetId) {
+        const metadata = await requestJson(
+          `https://www.googleapis.com/drive/v3/files/${googleReference.id}?fields=id,name,mimeType,webViewLink,webContentLink,size,createdTime,modifiedTime`,
+          { headers }
+        ) as Record<string, unknown>
+
+        if (String(metadata.mimeType || '') === 'application/vnd.google-apps.spreadsheet') {
+          const targetRange = range || 'A:ZZ'
+          return requestJson(
+            `https://sheets.googleapis.com/v4/spreadsheets/${googleReference.id}/values/${encodeURIComponent(targetRange)}`,
+            { headers }
+          )
+        }
+
+        if (isDelimitedTextFile(metadata)) {
+          const text = await requestText(
+            `https://www.googleapis.com/drive/v3/files/${googleReference.id}?alt=media`,
+            { headers }
+          )
+          const delimiter = String(metadata.name || '').toLowerCase().endsWith('.tsv') || String(metadata.mimeType || '') === 'text/tab-separated-values' ? '\t' : ','
+          const table = mapTabularRows(parseDelimitedText(text, delimiter))
+          return {
+            file: metadata,
+            ...table,
+          }
+        }
+
+        if (isSpreadsheetBinaryFile(metadata)) {
+          const buffer = await requestArrayBuffer(
+            `https://www.googleapis.com/drive/v3/files/${googleReference.id}?alt=media`,
+            { headers }
+          )
+          return {
+            file: metadata,
+            ...readSpreadsheetBuffer(buffer),
+          }
+        }
+
+        throw new Error('This file type is not supported in Google Sheets. Use a Google Sheet, CSV, TSV, XLS, or XLSX file.')
+      }
+
+      if (!resolvedSpreadsheetId) throw new Error('Spreadsheet ID, Google Sheets link, or file is required for this operation')
 
       if (operation === 'append') {
         return requestJson(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${resolvedSpreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`,
           {
             method: 'POST',
             headers,
@@ -842,7 +1024,7 @@ async function executeNode(
 
       if (operation === 'write' || operation === 'update') {
         return requestJson(
-          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+          `https://sheets.googleapis.com/v4/spreadsheets/${resolvedSpreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
           {
             method: 'PUT',
             headers,
@@ -852,7 +1034,7 @@ async function executeNode(
       }
 
       return requestJson(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${resolvedSpreadsheetId}/values/${encodeURIComponent(range || 'A:ZZ')}`,
         { headers }
       )
     }

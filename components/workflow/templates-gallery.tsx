@@ -248,6 +248,70 @@ const TEMPLATES: WorkflowTemplate[] = [
     },
   },
   {
+    id: 'google-sheet-manual-test',
+    name: 'Google Sheet Manual Test',
+    description: 'Load a Google Sheet, CSV, or XLSX from a link and inspect the JSON response',
+    category: 'Data',
+    icon: FileSpreadsheet,
+    color: '#34a853',
+    workflow: {
+      name: 'Google Sheet Manual Test',
+      description: 'Manual test flow for reading spreadsheet links and inspecting JSON output',
+      nodes: [
+        {
+          id: 'trigger',
+          type: 'manual-trigger',
+          position: { x: 100, y: 220 },
+          data: {
+            label: 'Paste Sheet Link',
+            category: 'trigger',
+            config: {
+              outputData:
+                '{"fileUrl":"https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_SHEET_ID/edit#gid=0","range":"A:Z"}',
+            },
+          },
+        },
+        {
+          id: 'read-sheet',
+          type: 'google-sheets',
+          position: { x: 420, y: 220 },
+          data: {
+            label: 'Read Sheet / File',
+            category: 'action',
+            config: {
+              inputSource: 'input',
+              operation: 'read',
+              range: '{{input.data.range}}',
+              spreadsheetId: '',
+              fileUrl: '',
+              fileId: '',
+              values: '[]',
+              sheets: '[]',
+              options: '{}',
+            },
+          },
+        },
+        {
+          id: 'format-json',
+          type: 'code',
+          position: { x: 760, y: 220 },
+          data: {
+            label: 'Format JSON Output',
+            category: 'transform',
+            config: {
+              code: 'return {\n  ok: true,\n  receivedAt: new Date().toISOString(),\n  source: input.file || input.workbook || null,\n  data: input,\n};',
+            },
+          },
+        },
+      ],
+      edges: [
+        { id: 'e1', source: 'trigger', target: 'read-sheet' },
+        { id: 'e2', source: 'read-sheet', target: 'format-json' },
+      ],
+      variables: {},
+    },
+  },
+  {
     id: 'lead-scoring',
     name: 'Lead Scoring',
     description: 'Score and route leads based on criteria',
