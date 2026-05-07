@@ -1,8 +1,11 @@
 import type { Workflow } from '@/lib/workflow/types'
-import { executeNode } from './node-executor'
+import { executeNodeForEachItem, executeNodeOnce, getExecutionMode } from './node-executor'
 import { getNextNodes, getStartNodes } from './graph'
+import { toWorkflowItems } from './items'
 import type {
   ExecuteWorkflowGraphOptions,
+  WorkflowItem,
+  WorkflowItemError,
   WorkflowEngineContext,
   WorkflowGraphExecutionResult,
   WorkflowNodeExecutionLog,
@@ -31,6 +34,7 @@ export async function executeWorkflowGraph(
     nodes: workflow.nodes,
     edges: workflow.edges,
     outputs: new Map(),
+    itemOutputs: new Map(),
     webhookPayload: options.webhookPayload,
     credentialResolver: options.credentialResolver,
   }
@@ -47,26 +51,46 @@ export async function executeWorkflowGraph(
     if (executedNodeIds.has(node.id)) continue
 
     const startedAt = now()
+    const inputItems = toWorkflowItems(input)
     const log: WorkflowNodeExecutionLog = {
       nodeId: node.id,
       nodeLabel: node.data.label,
       nodeType: node.type,
       status: 'running',
       startedAt,
-      input,
+      input: inputItems,
       output: null,
+      inputItemCount: inputItems.length,
     }
     logs.push(log)
 
     try {
-      const output = await executeNode(node, input, ctx)
+      const executionMode = getExecutionMode(node)
+      let output: WorkflowItem[] | Record<string, WorkflowItem[]>
+      let itemErrors: WorkflowItemError[] = []
+
+      if (executionMode === 'perItem') {
+        const result = await executeNodeForEachItem(node, inputItems, ctx)
+        output = result.items
+        itemErrors = result.itemErrors
+      } else {
+        output = await executeNodeOnce(node, inputItems, ctx)
+      }
+
       const finishedAt = now()
+      const outputItems = Array.isArray(output)
+        ? output
+        : Object.values(output).flatMap((items) => items)
 
       log.status = 'success'
       log.finishedAt = finishedAt
       log.durationMs = durationMs(startedAt, finishedAt)
       log.output = output
+      log.outputItemCount = outputItems.length
+      log.itemErrors = itemErrors
+      log.summary = formatNodeSummary(node.data.label, inputItems.length, outputItems.length, itemErrors.length)
       ctx.outputs.set(node.id, output)
+      ctx.itemOutputs.set(node.id, outputItems)
       executedNodeIds.add(node.id)
 
       for (const next of getNextNodes(node, output, workflow.nodes, workflow.edges)) {
@@ -108,4 +132,9 @@ export async function executeWorkflowGraph(
 }
 
 export { getNextNodes, getStartNodes } from './graph'
-export { executeNode } from './node-executor'
+export { executeNode, executeNodeForEachItem, executeNodeOnce } from './node-executor'
+
+function formatNodeSummary(nodeLabel: string, inputCount: number, outputCount: number, errorCount: number) {
+  const base = `${nodeLabel}: ${inputCount} item(s) received, ${outputCount} item(s) returned`
+  return errorCount > 0 ? `${base}, ${errorCount} item error(s)` : base
+}

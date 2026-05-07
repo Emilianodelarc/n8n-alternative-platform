@@ -315,14 +315,27 @@
   }
 
   .node-config-footer {
-    display: flex;
+    display: grid;
     flex-shrink: 0;
     align-items: center;
-    justify-content: flex-end;
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1fr) minmax(0, 1.1fr);
     gap: 8px;
     border-top: 1px solid rgb(0 0 0 / 8%);
     background: #ffffff;
-    padding: 14px 20px;
+    padding: 12px;
+  }
+
+  .node-config-footer .node-config-footer-button {
+    min-width: 0;
+    width: 100%;
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 12px;
+    line-height: 1;
+  }
+
+  .node-config-footer .node-config-footer-button svg {
+    flex-shrink: 0;
   }
 
   .dark .node-config-footer {

@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { useWorkflowStore } from '@/lib/workflow/store'
 import { NODE_TYPES, type ConfigField, type NodeCategory, type Workflow, type WorkflowExecution, type WorkflowNode } from '@/lib/workflow/types'
 import { executeNode } from '@/lib/workflow-engine'
+import { fetchBackendCredentials, type CredentialSummary } from '@/lib/workflow/api-client'
 import { useI18n } from '@/lib/i18n'
 import { X, Trash2, Settings, Play, Code, Info, Copy, Check, AlertCircle, KeyRound, ClipboardList, ArrowRight, Loader2 } from 'lucide-react'
 
@@ -471,7 +472,18 @@ export function NodePanel({ className }: NodePanelProps) {
   const [isDraggingExpression, setIsDraggingExpression] = useState(false)
   const [dragTargetField, setDragTargetField] = useState<string | null>(null)
   const [manualRun, setManualRun] = useState<ManualNodeRun>({ status: 'idle', input: undefined })
+  const [credentials, setCredentials] = useState<CredentialSummary[]>([])
+  const [isLoadingCredentials, setIsLoadingCredentials] = useState(false)
   const configScrollRef = useRef<HTMLDivElement | null>(null)
+  const googleCredential = credentials.find((credential) => credential.service === 'google')
+  const googleAccountEmail =
+    googleCredential &&
+    String(
+      googleCredential.config.email ||
+      googleCredential.config.accountEmail ||
+      googleCredential.config.userEmail ||
+      googleCredential.name
+    )
 
   useEffect(() => {
     if (!node || !nodeType) return
@@ -485,6 +497,29 @@ export function NodePanel({ className }: NodePanelProps) {
       updateNodeData(node.id, { config: nextConfig })
     }
   }, [node, nodeType, updateNodeData, workflow, currentExecution, executionHistory])
+
+  useEffect(() => {
+    if (node?.type !== 'google-sheets') return
+
+    let isMounted = true
+    setIsLoadingCredentials(true)
+    fetchBackendCredentials()
+      .then((items) => {
+        if (!isMounted) return
+        setCredentials(items)
+        if (items.some((credential) => credential.service === 'google') && !node.data.config?.credentialId) {
+          updateNodeConfig(node.id, { credentialId: 'service:google' })
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (isMounted) setIsLoadingCredentials(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [node, updateNodeConfig])
 
   const validateField = useCallback((field: ConfigField, value: unknown): string | null => {
     if (field.required && (!value || (typeof value === 'string' && value.trim() === ''))) {
@@ -625,6 +660,7 @@ export function NodePanel({ className }: NodePanelProps) {
         nodes: workflow.nodes,
         edges: workflow.edges,
         outputs: new Map(),
+        itemOutputs: new Map(),
       })
       const finishedAt = new Date().toISOString()
       setManualRun({
@@ -647,6 +683,10 @@ export function NodePanel({ className }: NodePanelProps) {
       })
     }
   }, [currentExecution, executionHistory, node, workflow])
+
+  const handleConnectGoogle = useCallback(() => {
+    window.location.href = `/api/oauth/google/start?next=${encodeURIComponent(window.location.pathname)}`
+  }, [])
 
   if (!node || !nodeType) {
     return (
@@ -952,6 +992,11 @@ export function NodePanel({ className }: NodePanelProps) {
               {field.required && <span className="text-destructive">*</span>}
             </Label>
             {renderConfigField(field)}
+            {field.helpText && (
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {tt(field.helpText)}
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -961,6 +1006,46 @@ export function NodePanel({ className }: NodePanelProps) {
         <p className="mt-1 text-xs text-muted-foreground">{t('passThrough')}</p>
       </div>
     )
+  )
+
+  const renderGoogleAccountCard = () => (
+    <div className="rounded-xl border border-border bg-white p-4 shadow-sm dark:bg-[#202020]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
+            googleCredential ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600'
+          )}>
+            <KeyRound className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">{t('connectedAccount')}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {googleCredential ? googleAccountEmail : t('noConnectedAccount')}
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            'shrink-0 text-[10px]',
+            googleCredential
+              ? 'border-green-500/40 bg-green-500/10 text-green-600'
+              : 'border-amber-500/40 bg-amber-500/10 text-amber-600'
+          )}
+        >
+          {isLoadingCredentials ? t('loading') : googleCredential ? t('connected') : t('disconnected')}
+        </Badge>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={handleConnectGoogle}>
+          {t('reconnect')}
+        </Button>
+        <Button type="button" variant="secondary" size="sm" onClick={handleConnectGoogle}>
+          {t('changeAccount')}
+        </Button>
+      </div>
+    </div>
   )
 
   return (
@@ -1186,16 +1271,33 @@ export function NodePanel({ className }: NodePanelProps) {
           </TabsContent>
 
           <TabsContent value="credentials" className="m-0 space-y-4 data-[state=inactive]:hidden">
-            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-              <div className="flex items-start gap-2">
-                <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">{t('connection')}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{t('connectionDescription')}</p>
+            {node.type === 'google-sheets' ? (
+              <>
+                {renderGoogleAccountCard()}
+                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                  <div className="flex items-start gap-2">
+                    <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{t('googleSheetsCredentialHelpTitle')}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{t('googleSheetsCredentialHelpText')}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            {renderFieldList(credentialFields)}
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                  <div className="flex items-start gap-2">
+                    <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{t('connection')}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{t('connectionDescription')}</p>
+                    </div>
+                  </div>
+                </div>
+                {renderFieldList(credentialFields)}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="execution" className="m-0 space-y-4 data-[state=inactive]:hidden">
@@ -1414,15 +1516,25 @@ export function NodePanel({ className }: NodePanelProps) {
       </Tabs>
 
       <footer className="node-config-footer">
-        <Button variant="outline" size="sm" onClick={handleClose}>
+        <Button variant="outline" size="sm" className="node-config-footer-button" onClick={handleClose}>
           {t('cancel')}
         </Button>
-        <Button variant="outline" size="sm" onClick={() => updateNodeData(node.id, { config: localConfig })}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="node-config-footer-button"
+          onClick={() => updateNodeData(node.id, { config: localConfig })}
+        >
           {t('saveChanges')}
         </Button>
-        <Button size="sm" onClick={handleManualNodeRun} disabled={manualRun.status === 'running'}>
+        <Button
+          size="sm"
+          className="node-config-footer-button"
+          onClick={handleManualNodeRun}
+          disabled={manualRun.status === 'running'}
+        >
           {manualRun.status === 'running' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-          {t('runNode')}
+          <span className="truncate">{t('runNode')}</span>
         </Button>
       </footer>
     </aside>

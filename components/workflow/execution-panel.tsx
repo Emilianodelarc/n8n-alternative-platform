@@ -136,6 +136,26 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
                     <span>{t('finished')}: {finishedAt ? new Date(finishedAt).toLocaleTimeString() : '-'}</span>
                   </div>
 
+                  {(result.inputItemCount !== undefined || result.outputItemCount !== undefined) && (
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                      <span className="rounded bg-background/70 px-2 py-1 text-muted-foreground">
+                        {t('itemsIn')}: {result.inputItemCount ?? 0}
+                      </span>
+                      <span className="rounded bg-background/70 px-2 py-1 text-muted-foreground">
+                        {t('itemsOut')}: {result.outputItemCount ?? 0}
+                      </span>
+                      {result.itemErrors && result.itemErrors.length > 0 && (
+                        <span className="rounded bg-red-500/10 px-2 py-1 text-red-400">
+                          {t('itemErrors')}: {result.itemErrors.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {result.summary && (
+                    <p className="mt-2 text-xs text-muted-foreground">{tt(result.summary)}</p>
+                  )}
+
                   {result.input !== undefined && result.input !== null && (
                     <div className="mt-2">
                       <p className="text-xs text-muted-foreground mb-1">{t('inputs')}:</p>
@@ -159,6 +179,15 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
                       <p className="text-xs text-red-400 mb-1">{t('error')}:</p>
                       <pre className="p-2 rounded bg-red-500/10 text-xs font-mono text-red-400 overflow-auto">
                         {result.error}
+                      </pre>
+                    </div>
+                  )}
+
+                  {result.itemErrors && result.itemErrors.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-red-400 mb-1">{t('itemErrors')}:</p>
+                      <pre className="p-2 rounded bg-red-500/10 text-xs font-mono text-red-400 overflow-auto max-h-24">
+                        {JSON.stringify(result.itemErrors, null, 2)}
                       </pre>
                     </div>
                   )}

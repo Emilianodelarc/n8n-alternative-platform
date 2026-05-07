@@ -54,6 +54,12 @@ export interface WorkflowEdge {
   targetHandle?: string
 }
 
+export interface WorkflowItem {
+  json: Record<string, unknown>
+  binary?: Record<string, unknown>
+  pairedItem?: number
+}
+
 export interface Workflow {
   id: string
   name: string
@@ -79,6 +85,15 @@ export interface NodeExecutionResult {
   finishedAt?: string
   durationMs?: number
   error?: string
+  inputItemCount?: number
+  outputItemCount?: number
+  currentItemIndex?: number
+  itemErrors?: Array<{
+    itemIndex: number
+    message: string
+    input?: WorkflowItem
+  }>
+  summary?: string
   startTime: string
   endTime?: string
   duration?: number
@@ -117,6 +132,7 @@ export interface ConfigField {
   label: string
   type: 'text' | 'textarea' | 'number' | 'select' | 'boolean' | 'json' | 'code' | 'password'
   placeholder?: string
+  helpText?: string
   defaultValue?: unknown
   options?: { label: string; value: string }[]
   required?: boolean
@@ -340,9 +356,28 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
     category: 'action',
     icon: 'Mail',
     color: '#3b82f6',
-    defaultConfig: { credentialId: '', from: '', to: '', cc: '', bcc: '', subject: '', emailFormat: 'html', body: '', attachments: '[]' },
+    defaultConfig: { credentialId: '', from: '', to: '', cc: '', bcc: '', subject: '', emailFormat: 'html', body: '', attachments: '[]', mode: 'oneEmailPerItem', executionMode: 'perItem', continueOnItemError: true },
     configSchema: [
       credentialField,
+      {
+        key: 'mode',
+        label: 'Send Mode',
+        type: 'select',
+        options: [
+          { label: 'One Email Per Item', value: 'oneEmailPerItem' },
+          { label: 'Single Email', value: 'singleEmail' },
+        ],
+      },
+      {
+        key: 'executionMode',
+        label: 'Execution Mode',
+        type: 'select',
+        options: [
+          { label: 'Per Item', value: 'perItem' },
+          { label: 'Once', value: 'once' },
+        ],
+      },
+      { key: 'continueOnItemError', label: 'Continue On Item Error', type: 'boolean', defaultValue: true },
       { key: 'from', label: 'From Email', type: 'text', placeholder: 'from@example.com' },
       { key: 'to', label: 'To', type: 'text', placeholder: 'email@example.com', required: true },
       { key: 'cc', label: 'CC', type: 'text' },
@@ -690,16 +725,16 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
   'filter': {
     type: 'filter',
     label: 'Filter',
-    description: 'Filter array items',
+    description: 'Filter workflow items',
     category: 'transform',
     icon: 'Filter',
     color: '#8b5cf6',
-    defaultConfig: { condition: 'item => item.active === true' },
+    defaultConfig: { condition: '$json.Estado === "pendiente"' },
     configSchema: [
-      { key: 'condition', label: 'Filter Condition', type: 'code', placeholder: 'item => item.active', required: true },
+      { key: 'condition', label: 'Filter Condition', type: 'code', placeholder: '$json.Estado === "pendiente"', required: true },
     ],
-    inputs: [{ id: 'input', label: 'Array', type: 'array' }],
-    outputs: [{ id: 'output', label: 'Filtered', type: 'array' }],
+    inputs: [{ id: 'input', label: 'Items', type: 'array' }],
+    outputs: [{ id: 'output', label: 'Filtered Items', type: 'array' }],
   },
   'split': {
     type: 'split',
@@ -1105,12 +1140,12 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
   'google-sheets': {
     type: 'google-sheets',
     label: 'Google Sheets',
-    description: 'Create, read, write, and append Google Sheets',
+    description: 'Read and write Google Sheets rows as workflow items',
     category: 'action',
     icon: 'Table',
     color: '#34a853',
     defaultConfig: {
-      credentialId: '',
+      credentialId: 'service:google',
       inputSource: 'id',
       spreadsheetId: '',
       fileUrl: '',
@@ -1119,101 +1154,170 @@ export const NODE_TYPES: Record<string, NodeTypeDefinition> = {
       sheets: '[]',
       sheetName: '',
       range: '',
-      operation: 'read',
+      operation: 'readRows',
+      hasHeaderRow: true,
+      returnMode: 'items',
+      mappingMode: 'automatic',
       values: '[]',
       columns: '{}',
+      keyColumn: '',
+      keyValue: '',
+      updateValues: '{}',
+      columnName: '',
+      initialValue: '',
+      searchColumn: '',
+      searchOperator: 'equals',
+      searchValue: '',
       options: '{}',
     },
     configSchema: [
-      credentialField,
-      {
-        key: 'inputSource',
-        label: 'Read Source',
-        type: 'select',
-        options: [
-          { label: 'Spreadsheet ID', value: 'id' },
-          { label: 'Google / Drive Link', value: 'url' },
-          { label: 'Incoming Input', value: 'input' },
-        ],
-        visibleWhen: { operation: 'read' },
-      },
       {
         key: 'operation',
-        label: 'Operation',
+        label: 'Action',
         type: 'select',
+        helpText: 'Choose what this node should do with Google Sheets.',
         options: [
-          { label: 'Create Spreadsheet', value: 'create' },
-          { label: 'Create Sheet Tab', value: 'createSheet' },
-          { label: 'Read Sheet / File', value: 'read' },
-          { label: 'Add Row(s)', value: 'append' },
-          { label: 'Replace Range', value: 'write' },
-          { label: 'Update Range', value: 'update' },
+          { label: 'Read Rows', value: 'readRows' },
+          { label: 'Append Rows', value: 'appendRows' },
+          { label: 'Update Row', value: 'updateRow' },
+          { label: 'Add Column', value: 'addColumn' },
+          { label: 'Search Rows', value: 'searchRows' },
+          { label: 'Clear Range', value: 'clearRange' },
+          { label: 'Get Sheets', value: 'getSheets' },
         ],
       },
       {
         key: 'spreadsheetId',
-        label: 'Spreadsheet ID',
+        label: 'Spreadsheet',
         type: 'text',
-        placeholder: 'Required for create tab, add rows, replace range, or update range',
-        visibleWhen: { operation: ['createSheet', 'append', 'write', 'update'] },
-      },
-      {
-        key: 'fileUrl',
-        label: 'Google Sheet / CSV / XLSX Link',
-        type: 'text',
-        placeholder: 'https://docs.google.com/spreadsheets/d/... or Drive file link',
-        visibleWhen: { operation: 'read', inputSource: 'url' },
-      },
-      {
-        key: 'fileId',
-        label: 'Drive File ID',
-        type: 'text',
-        placeholder: 'Optional alternative to the link',
-        visibleWhen: { operation: 'read', inputSource: 'url' },
-      },
-      {
-        key: 'title',
-        label: 'New Spreadsheet Title',
-        type: 'text',
-        placeholder: 'Example: Leads Import Test',
-        visibleWhen: { operation: ['create', 'createSheet'] },
-      },
-      {
-        key: 'sheets',
-        label: 'Sheet Tabs (JSON array)',
-        type: 'json',
-        placeholder: '["Sheet1", "Customers"]',
-        visibleWhen: { operation: ['create', 'createSheet'] },
+        placeholder: 'Paste the spreadsheet ID or URL',
+        helpText: 'Use the full Google Sheets URL or the document ID. Automatic picker is not available yet.',
+        visibleWhen: { operation: ['readRows', 'appendRows', 'updateRow', 'addColumn', 'searchRows', 'clearRange', 'getSheets'] },
       },
       {
         key: 'sheetName',
-        label: 'Single Sheet Tab Name',
+        label: 'Sheet',
         type: 'text',
-        placeholder: 'Use this if you only want to create one tab',
-        visibleWhen: { operation: 'createSheet' },
+        placeholder: 'Sheet1',
+        helpText: 'Name of the tab inside the spreadsheet.',
+        visibleWhen: { operation: ['readRows', 'appendRows', 'updateRow', 'addColumn', 'searchRows', 'clearRange'] },
       },
       {
         key: 'range',
         label: 'Range',
         type: 'text',
-        placeholder: 'Examples: Sheet1!A:Z or Customers!A1:D200',
-        visibleWhen: { operation: ['read', 'append', 'write', 'update'] },
+        placeholder: 'A:Z',
+        helpText: 'Optional range to use inside the selected sheet, for example A:Z or A1:D200.',
+        visibleWhen: { operation: ['readRows', 'clearRange'] },
+      },
+      {
+        key: 'hasHeaderRow',
+        label: 'Has header row',
+        type: 'boolean',
+        helpText: 'Use the first row as column names.',
+        defaultValue: true,
+        visibleWhen: { operation: 'readRows' },
+      },
+      {
+        key: 'returnMode',
+        label: 'Return mode',
+        type: 'select',
+        helpText: 'Return one row per item for workflows, or the whole table as one item.',
+        options: [
+          { label: 'One row per item', value: 'items' },
+          { label: 'Full table', value: 'table' },
+        ],
+        visibleWhen: { operation: 'readRows' },
+      },
+      {
+        key: 'mappingMode',
+        label: 'Mapping mode',
+        type: 'select',
+        helpText: 'Automatic uses item fields as columns. Manual lets you choose the mapping.',
+        options: [
+          { label: 'Automatic', value: 'automatic' },
+          { label: 'Manual', value: 'manual' },
+        ],
+        visibleWhen: { operation: 'appendRows' },
       },
       {
         key: 'columns',
-        label: 'Columns / Mapping (JSON)',
+        label: 'Column mapping',
         type: 'json',
-        placeholder: '{"Name":"{{$json.name}}","Email":"{{$json.email}}"}',
-        visibleWhen: { operation: 'append' },
+        placeholder: '{"Nombre":"{{ $json.Nombre }}","Email":"{{ $json.Email }}"}',
+        helpText: 'Map sheet columns to values from each incoming item.',
+        visibleWhen: { operation: 'appendRows', mappingMode: 'manual' },
       },
       {
-        key: 'values',
-        label: 'Values (JSON array)',
-        type: 'json',
-        placeholder: '[["Name", "Email"], ["Ada", "ada@example.com"]]',
-        visibleWhen: { operation: ['append', 'write', 'update'] },
+        key: 'keyColumn',
+        label: 'Key column',
+        type: 'text',
+        placeholder: 'Email',
+        helpText: 'Column used to find the row that should be updated.',
+        visibleWhen: { operation: 'updateRow' },
       },
-      simpleOptionsField,
+      {
+        key: 'keyValue',
+        label: 'Key value',
+        type: 'text',
+        placeholder: '{{ $json.Email }}',
+        helpText: 'Value to match in the key column. You can use data from the current item.',
+        visibleWhen: { operation: 'updateRow' },
+      },
+      {
+        key: 'updateValues',
+        label: 'Update values',
+        type: 'json',
+        placeholder: '{"Estado":"enviado"}',
+        helpText: 'JSON object with the columns and values to update.',
+        visibleWhen: { operation: 'updateRow' },
+      },
+      {
+        key: 'columnName',
+        label: 'Column name',
+        type: 'text',
+        placeholder: 'Estado',
+        helpText: 'Name of the new column to add to the header row.',
+        visibleWhen: { operation: 'addColumn' },
+      },
+      {
+        key: 'initialValue',
+        label: 'Initial value',
+        type: 'text',
+        placeholder: 'pendiente',
+        helpText: 'Optional value to fill in the new column for existing rows.',
+        visibleWhen: { operation: 'addColumn' },
+      },
+      {
+        key: 'searchColumn',
+        label: 'Column',
+        type: 'text',
+        placeholder: 'Estado',
+        helpText: 'Column where the search condition will be applied.',
+        visibleWhen: { operation: 'searchRows' },
+      },
+      {
+        key: 'searchOperator',
+        label: 'Operator',
+        type: 'select',
+        helpText: 'Comparison used to decide which rows match.',
+        options: [
+          { label: 'Equals', value: 'equals' },
+          { label: 'Does not equal', value: 'notEquals' },
+          { label: 'Contains', value: 'contains' },
+          { label: 'Is empty', value: 'empty' },
+          { label: 'Is not empty', value: 'notEmpty' },
+        ],
+        visibleWhen: { operation: 'searchRows' },
+      },
+      {
+        key: 'searchValue',
+        label: 'Value',
+        type: 'text',
+        placeholder: 'pendiente',
+        helpText: 'Value to compare against the selected column.',
+        visibleWhen: { operation: 'searchRows' },
+      },
     ],
     inputs: [{ id: 'input', label: 'Input', type: 'any' }],
     outputs: [{ id: 'output', label: 'Data', type: 'any' }],

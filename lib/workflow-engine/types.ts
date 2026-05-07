@@ -1,5 +1,19 @@
 import type { ExecutionStatus, Workflow, WorkflowEdge, WorkflowNode } from '@/lib/workflow/types'
 
+export type WorkflowItem = {
+  json: Record<string, unknown>
+  binary?: Record<string, unknown>
+  pairedItem?: number
+}
+
+export type WorkflowNodeExecutionMode = 'once' | 'perItem'
+
+export interface WorkflowItemError {
+  itemIndex: number
+  message: string
+  input?: WorkflowItem
+}
+
 export interface WorkflowNodeExecutionLog {
   nodeId: string
   nodeLabel: string
@@ -11,6 +25,11 @@ export interface WorkflowNodeExecutionLog {
   input: unknown
   output: unknown
   error?: string
+  inputItemCount?: number
+  outputItemCount?: number
+  currentItemIndex?: number
+  itemErrors?: WorkflowItemError[]
+  summary?: string
 }
 
 export interface WorkflowGraphExecutionResult {
@@ -30,6 +49,7 @@ export interface WorkflowEngineContext {
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
   outputs: Map<string, unknown>
+  itemOutputs: Map<string, WorkflowItem[]>
   webhookPayload?: unknown
   credentialResolver?: (credentialId: string) => Promise<Record<string, unknown> | null>
 }
