@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NodeExecutionResult, WorkflowExecution } from '@/lib/workflow/types'
 import { databaseNotConfiguredResponse, requireDatabaseUrl } from '@/lib/api/responses'
-import { executeWorkflow } from '@/lib/workflow/engine'
+import { executeWorkflowGraph, type WorkflowNodeExecutionLog } from '@/lib/workflow-engine'
 import { findWorkflowByWebhookPath, getCredentialConfig, saveExecution } from '@/lib/db/workflows'
 
 interface RouteContext {
@@ -21,7 +21,6 @@ async function handleWebhook(request: Request, context: RouteContext) {
 
   const executionId = crypto.randomUUID()
   const startTime = new Date().toISOString()
-  const nodeResults: Record<string, NodeExecutionResult> = {}
 
   try {
     const payload =
@@ -29,48 +28,33 @@ async function handleWebhook(request: Request, context: RouteContext) {
         ? Object.fromEntries(new URL(request.url).searchParams.entries())
         : await request.json().catch(() => ({}))
 
-    await executeWorkflow(
-      workflow,
-      {
-        onNodeStart: (nodeId) => {
-          nodeResults[nodeId] = {
-            nodeId,
-            status: 'running',
-            input: null,
-            output: null,
-            startTime: new Date().toISOString(),
-          }
-        },
-        onNodeComplete: (nodeId, result) => {
-          nodeResults[nodeId] = {
-            ...nodeResults[nodeId],
-            status: 'success',
-            output: result.output,
-            endTime: new Date().toISOString(),
-            duration: result.duration,
-          }
-        },
-        onNodeError: (nodeId, error) => {
-          nodeResults[nodeId] = {
-            ...nodeResults[nodeId],
-            status: 'error',
-            error: error.message,
-            endTime: new Date().toISOString(),
-          }
-        },
-      },
-      { webhookPayload: payload, credentialResolver: getCredentialConfig }
+    const graphExecution = await executeWorkflowGraph(workflow, {
+      webhookPayload: payload,
+      credentialResolver: getCredentialConfig,
+    })
+    const endTime = new Date().toISOString()
+    const nodeResults = Object.fromEntries(
+      graphExecution.logs.map((log) => [log.nodeId, mapExecutionLog(log)])
     )
+    const logs = Object.values(nodeResults)
 
     const execution: WorkflowExecution = {
       id: executionId,
       workflowId: workflow.id,
-      status: 'success',
+      status: graphExecution.status,
       startTime,
-      endTime: new Date().toISOString(),
+      endTime,
+      durationMs: Math.max(0, Date.parse(endTime) - Date.parse(startTime)),
       nodeResults,
+      logs,
+      errorNodeId: graphExecution.error?.nodeId,
+      errorMessage: graphExecution.error?.message,
+      error: graphExecution.error?.message,
     }
     await saveExecution(execution)
+    if (graphExecution.status === 'error') {
+      return NextResponse.json({ ok: false, error: graphExecution.error?.message, executionId }, { status: 500 })
+    }
     return NextResponse.json({ ok: true, workflowId: workflow.id, executionId })
   } catch (error) {
     const execution: WorkflowExecution = {
@@ -79,11 +63,31 @@ async function handleWebhook(request: Request, context: RouteContext) {
       status: 'error',
       startTime,
       endTime: new Date().toISOString(),
-      nodeResults,
+      nodeResults: {},
+      logs: [],
+      errorMessage: (error as Error).message,
       error: (error as Error).message,
     }
     await saveExecution(execution).catch(() => undefined)
     return NextResponse.json({ ok: false, error: (error as Error).message, executionId }, { status: 500 })
+  }
+}
+
+function mapExecutionLog(log: WorkflowNodeExecutionLog): NodeExecutionResult {
+  return {
+    nodeId: log.nodeId,
+    nodeLabel: log.nodeLabel,
+    nodeType: log.nodeType,
+    status: log.status,
+    input: log.input,
+    output: log.output,
+    error: log.error,
+    startedAt: log.startedAt,
+    finishedAt: log.finishedAt,
+    durationMs: log.durationMs,
+    startTime: log.startedAt,
+    endTime: log.finishedAt,
+    duration: log.durationMs,
   }
 }
 

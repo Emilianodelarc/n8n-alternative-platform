@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,6 +12,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Dialog,
   DialogContent,
@@ -41,6 +52,7 @@ import {
   Redo2,
   PanelLeft,
   PanelRight,
+  Workflow,
 } from 'lucide-react'
 
 interface ToolbarProps {
@@ -75,6 +87,7 @@ export function Toolbar({
   className 
 }: ToolbarProps) {
   const { t, tt } = useI18n()
+  const router = useRouter()
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
   const updateWorkflow = useWorkflowStore((s) => s.updateWorkflow)
   const duplicateWorkflow = useWorkflowStore((s) => s.duplicateWorkflow)
@@ -85,6 +98,7 @@ export function Toolbar({
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [importJson, setImportJson] = useState('')
@@ -137,23 +151,24 @@ export function Toolbar({
   }
 
   const handleDelete = () => {
-    if (workflow && confirm(t('deleteWorkflowConfirm'))) {
-      deleteWorkflow(workflow.id)
-    }
+    if (!workflow) return
+    deleteWorkflow(workflow.id)
+    setIsDeleteDialogOpen(false)
+    router.replace('/')
   }
 
   if (!workflow) return null
 
   return (
     <>
-      <div className={cn('flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 lg:flex-nowrap', className)}>
+      <div className={cn('flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-[#fbfaf8] px-3 py-2 shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-white/10 dark:bg-[#1b1b1b] lg:flex-nowrap', className)}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link href="/">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md">
               <ChevronLeft className="w-4 h-4" />
             </Button>
           </Link>
-          <div className="hidden items-center gap-1 rounded-md border border-border bg-background p-1 lg:flex">
+          <div className="hidden items-center gap-1 rounded-md border border-black/10 bg-[#f1f0ec] p-1 dark:border-white/10 dark:bg-[#242424] lg:flex">
             <Button
               variant={isLibraryOpen ? 'secondary' : 'ghost'}
               size="icon"
@@ -173,19 +188,24 @@ export function Toolbar({
               <PanelRight className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex min-w-0 items-center gap-1.5">
-            <h1 className="max-w-[42vw] truncate text-base font-semibold text-foreground sm:max-w-[52vw] lg:max-w-[320px]">
-              {tt(workflow.name)}
-            </h1>
+          <div className="flex min-w-0 items-center gap-2 rounded-md border border-transparent px-1.5 py-1">
+            <span className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#ff6d5a]/15 text-[#d94d3d] sm:flex">
+              <Workflow className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="max-w-[42vw] truncate text-sm font-semibold leading-tight text-foreground sm:max-w-[52vw] lg:max-w-[320px]">
+                {tt(workflow.name)}
+              </h1>
+              {workflow.description && (
+                <p className="hidden max-w-[320px] truncate text-xs leading-tight text-muted-foreground lg:block">
+                  {tt(workflow.description)}
+                </p>
+              )}
+            </div>
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleOpenEditDialog}>
               <Pencil className="w-3 h-3" />
             </Button>
           </div>
-          {workflow.description && (
-            <span className="hidden max-w-[260px] truncate text-sm text-muted-foreground xl:block">
-              {tt(workflow.description)}
-            </span>
-          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
@@ -202,7 +222,7 @@ export function Toolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 rounded-md"
               onClick={onUndo}
               disabled={!canUndo}
               title={`${t('undo')} (Ctrl+Z)`}
@@ -212,7 +232,7 @@ export function Toolbar({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 rounded-md"
               onClick={onRedo}
               disabled={!canRedo}
               title={`${t('redo')} (Ctrl+Shift+Z)`}
@@ -224,7 +244,7 @@ export function Toolbar({
           <Button
             onClick={onExecute}
             disabled={isExecuting || workflow.nodes.length === 0}
-            className="h-8 bg-green-600 px-3 text-white hover:bg-green-700"
+            className="h-8 rounded-md bg-[#ff6d5a] px-3 text-white shadow-sm hover:bg-[#eb5946]"
           >
             {isExecuting ? (
               <>
@@ -274,7 +294,7 @@ export function Toolbar({
                 <ThemeToggle />
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+              <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} className="text-destructive">
                 <Trash2 className="w-4 h-4 mr-2" />
                 {t('deleteWorkflow')}
               </DropdownMenuItem>
@@ -342,6 +362,44 @@ export function Toolbar({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent className="max-w-md overflow-hidden p-0">
+          <div className="border-b bg-destructive/5 px-6 py-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <AlertDialogHeader className="gap-1 text-left">
+                <AlertDialogTitle>{t('deleteWorkflowTitle')}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('deleteWorkflowDescription')}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </div>
+          <div className="px-6 py-4">
+            <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium text-foreground">{tt(workflow.name)}</span>
+              {workflow.description && (
+                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                  {tt(workflow.description)}
+                </p>
+              )}
+            </div>
+          </div>
+          <AlertDialogFooter className="border-t bg-muted/20 px-6 py-4">
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              {t('confirmDelete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

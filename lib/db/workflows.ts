@@ -25,11 +25,20 @@ export async function initializeDatabase() {
       workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
       status TEXT NOT NULL,
       node_results JSONB NOT NULL DEFAULT '{}'::jsonb,
+      logs JSONB NOT NULL DEFAULT '[]'::jsonb,
       error TEXT,
+      error_node_id TEXT,
+      error_message TEXT,
       started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      ended_at TIMESTAMPTZ
+      ended_at TIMESTAMPTZ,
+      duration_ms INTEGER
     )
   `
+
+  await sql`ALTER TABLE workflow_executions ADD COLUMN IF NOT EXISTS logs JSONB NOT NULL DEFAULT '[]'::jsonb`
+  await sql`ALTER TABLE workflow_executions ADD COLUMN IF NOT EXISTS error_node_id TEXT`
+  await sql`ALTER TABLE workflow_executions ADD COLUMN IF NOT EXISTS error_message TEXT`
+  await sql`ALTER TABLE workflow_executions ADD COLUMN IF NOT EXISTS duration_ms INTEGER`
 
   await sql`
     CREATE TABLE IF NOT EXISTS credentials (
@@ -68,9 +77,13 @@ type ExecutionRow = {
   workflow_id: string
   status: WorkflowExecution['status']
   node_results: WorkflowExecution['nodeResults']
+  logs: WorkflowExecution['logs']
   error: string | null
+  error_node_id: string | null
+  error_message: string | null
   started_at: Date | string
   ended_at: Date | string | null
+  duration_ms: number | null
 }
 
 type CredentialRow = {
@@ -106,9 +119,13 @@ function mapExecution(row: ExecutionRow): WorkflowExecution {
     workflowId: row.workflow_id,
     status: row.status,
     nodeResults: row.node_results || {},
-    error: row.error || undefined,
+    logs: row.logs || Object.values(row.node_results || {}),
+    error: row.error || row.error_message || undefined,
+    errorNodeId: row.error_node_id || undefined,
+    errorMessage: row.error_message || row.error || undefined,
     startTime: toIso(row.started_at)!,
     endTime: toIso(row.ended_at),
+    durationMs: row.duration_ms ?? undefined,
   }
 }
 
@@ -171,23 +188,47 @@ export async function deleteWorkflowById(id: string) {
 export async function saveExecution(execution: WorkflowExecution) {
   await ensureDatabaseInitialized()
   const sql = getSql()
+  const logs = execution.logs || Object.values(execution.nodeResults || {})
+  const durationMs = execution.durationMs ??
+    (execution.endTime ? Math.max(0, Date.parse(execution.endTime) - Date.parse(execution.startTime)) : null)
+  const errorMessage = execution.errorMessage || execution.error || null
   const rows = await sql`
-    INSERT INTO workflow_executions (id, workflow_id, status, node_results, error, started_at, ended_at)
+    INSERT INTO workflow_executions (
+      id,
+      workflow_id,
+      status,
+      node_results,
+      logs,
+      error,
+      error_node_id,
+      error_message,
+      started_at,
+      ended_at,
+      duration_ms
+    )
     VALUES (
       ${execution.id},
       ${execution.workflowId},
       ${execution.status},
       ${JSON.stringify(execution.nodeResults || {})}::jsonb,
+      ${JSON.stringify(logs)}::jsonb,
       ${execution.error || null},
+      ${execution.errorNodeId || null},
+      ${errorMessage},
       ${execution.startTime || new Date().toISOString()},
-      ${execution.endTime || null}
+      ${execution.endTime || null},
+      ${durationMs}
     )
     ON CONFLICT (id) DO UPDATE SET
       status = EXCLUDED.status,
       node_results = EXCLUDED.node_results,
+      logs = EXCLUDED.logs,
       error = EXCLUDED.error,
-      ended_at = EXCLUDED.ended_at
-    RETURNING id, workflow_id, status, node_results, error, started_at, ended_at
+      error_node_id = EXCLUDED.error_node_id,
+      error_message = EXCLUDED.error_message,
+      ended_at = EXCLUDED.ended_at,
+      duration_ms = EXCLUDED.duration_ms
+    RETURNING id, workflow_id, status, node_results, logs, error, error_node_id, error_message, started_at, ended_at, duration_ms
   ` as ExecutionRow[]
   return mapExecution(rows[0])
 }
@@ -196,7 +237,7 @@ export async function listExecutions(workflowId: string) {
   await ensureDatabaseInitialized()
   const sql = getSql()
   const rows = await sql`
-    SELECT id, workflow_id, status, node_results, error, started_at, ended_at
+    SELECT id, workflow_id, status, node_results, logs, error, error_node_id, error_message, started_at, ended_at, duration_ms
     FROM workflow_executions
     WHERE workflow_id = ${workflowId}
     ORDER BY started_at DESC

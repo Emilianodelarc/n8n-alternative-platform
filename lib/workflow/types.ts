@@ -70,9 +70,14 @@ export type ExecutionStatus = 'pending' | 'running' | 'success' | 'error' | 'ski
 
 export interface NodeExecutionResult {
   nodeId: string
+  nodeLabel?: string
+  nodeType?: string
   status: ExecutionStatus
   input: unknown
   output: unknown
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
   error?: string
   startTime: string
   endTime?: string
@@ -85,7 +90,11 @@ export interface WorkflowExecution {
   status: ExecutionStatus
   startTime: string
   endTime?: string
+  durationMs?: number
   nodeResults: Record<string, NodeExecutionResult>
+  logs?: NodeExecutionResult[]
+  errorNodeId?: string
+  errorMessage?: string
   error?: string
 }
 

@@ -42,10 +42,12 @@ function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
   const StatusIcon = config.icon
 
   const duration = execution.endTime
-    ? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime()
+    ? execution.durationMs ?? new Date(execution.endTime).getTime() - new Date(execution.startTime).getTime()
     : null
 
-  const nodeResults = Object.entries(execution.nodeResults)
+  const nodeResults = execution.logs?.length
+    ? execution.logs.map((result) => [result.nodeId, result] as const)
+    : Object.entries(execution.nodeResults)
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -77,13 +79,16 @@ function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="mt-2 ml-4 pl-4 border-l border-border space-y-2">
-          {execution.error && (
+          {(execution.errorMessage || execution.error) && (
             <div className="p-2 rounded bg-red-500/10 border border-red-500/30 text-xs text-red-400">
-              {execution.error}
+              {execution.errorNodeId && (
+                <div className="mb-1 font-medium">{t('node')}: {execution.errorNodeId}</div>
+              )}
+              {execution.errorMessage || execution.error}
             </div>
           )}
           {nodeResults.length > 0 && (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {nodeResults.map(([nodeId, result]) => {
                 const node = workflow?.nodes.find((n) => n.id === nodeId)
                 const nodeConfig = statusConfig[result.status]
@@ -91,15 +96,42 @@ function ExecutionItem({ execution }: { execution: WorkflowExecution }) {
                 return (
                   <div
                     key={nodeId}
-                    className="flex items-center gap-2 p-2 rounded bg-muted/50 text-xs"
+                    className="rounded border border-border bg-muted/40 p-2 text-xs"
                   >
-                    <NodeIcon className={cn('w-3 h-3', nodeConfig.color)} />
-                    <span className="font-medium">{node?.data.label ? tt(node.data.label) : nodeId}</span>
-                    {result.duration && (
-                      <span className="text-muted-foreground">{result.duration}ms</span>
+                    <div className="flex items-center gap-2">
+                      <NodeIcon className={cn('w-3 h-3', nodeConfig.color)} />
+                      <span className="font-medium">{result.nodeLabel || (node?.data.label ? tt(node.data.label) : nodeId)}</span>
+                      {result.nodeType && (
+                        <Badge variant="outline" className="text-[10px]">{result.nodeType}</Badge>
+                      )}
+                      {(result.durationMs ?? result.duration) !== undefined && (
+                        <span className="ml-auto text-muted-foreground">{result.durationMs ?? result.duration}ms</span>
+                      )}
+                    </div>
+                    <div className="mt-1 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+                      <span>{t('started')}: {result.startedAt || result.startTime}</span>
+                      <span>{t('finished')}: {result.finishedAt || result.endTime || '-'}</span>
+                    </div>
+                    {result.input !== undefined && result.input !== null && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-muted-foreground">{t('inputs')}</summary>
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-background/60 p-2 font-mono">
+                          {JSON.stringify(result.input, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                    {result.output !== undefined && result.output !== null && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-muted-foreground">{t('output')}</summary>
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-background/60 p-2 font-mono">
+                          {JSON.stringify(result.output, null, 2)}
+                        </pre>
+                      </details>
                     )}
                     {result.error && (
-                      <span className="text-red-400 truncate flex-1">{result.error}</span>
+                      <pre className="mt-2 overflow-auto rounded bg-red-500/10 p-2 font-mono text-red-400">
+                        {result.error}
+                      </pre>
                     )}
                   </div>
                 )

@@ -12,9 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useWorkflowStore } from '@/lib/workflow/store'
-import { NODE_TYPES, type ConfigField, type NodeCategory, type WorkflowNode } from '@/lib/workflow/types'
+import { NODE_TYPES, type ConfigField, type NodeCategory, type Workflow, type WorkflowExecution, type WorkflowNode } from '@/lib/workflow/types'
+import { executeNode } from '@/lib/workflow-engine'
 import { useI18n } from '@/lib/i18n'
-import { X, Trash2, Settings, Play, Code, Info, Copy, Check, AlertCircle, KeyRound, ClipboardList, ArrowRight } from 'lucide-react'
+import { X, Trash2, Settings, Play, Code, Info, Copy, Check, AlertCircle, KeyRound, ClipboardList, ArrowRight, Loader2 } from 'lucide-react'
 
 const categoryStyles: Record<NodeCategory, { bg: string; text: string; border: string }> = {
   trigger: { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30' },
@@ -47,6 +48,8 @@ const connectionFields: ConfigField[] = [
   { key: 'credentialHeaders', label: 'Additional Headers (JSON)', type: 'json', placeholder: '{"X-Custom":"value"}' },
 ]
 
+const connectionFieldKeys = new Set(connectionFields.map((field) => field.key))
+
 const connectionNodeTypes = new Set([
   'http-request',
   'slack-message',
@@ -73,6 +76,85 @@ function fieldIsVisible(field: ConfigField, config: Record<string, unknown>) {
     if (Array.isArray(expected)) return expected.includes(currentValue)
     return currentValue === expected
   })
+}
+
+function configValue(config: Record<string, unknown>, key: string, fallback: unknown) {
+  return config[key] ?? fallback
+}
+
+function fieldMatchesNodeMode(nodeType: string, field: ConfigField, config: Record<string, unknown>) {
+  const key = field.key
+
+  if (key === 'credentialType') return true
+  if (key === 'credentialName') return configValue(config, 'credentialType', 'none') !== 'none'
+  if (key === 'accessToken') return configValue(config, 'credentialType', 'none') === 'bearerToken'
+  if (key === 'apiKeyName' || key === 'apiKeyValue') return configValue(config, 'credentialType', 'none') === 'apiKeyHeader'
+  if (key === 'basicUsername' || key === 'basicPassword') return configValue(config, 'credentialType', 'none') === 'basicAuth'
+  if (key === 'credentialHeaders') return configValue(config, 'credentialType', 'none') === 'rawHeaders'
+
+  switch (nodeType) {
+    case 'schedule-trigger': {
+      const triggerType = configValue(config, 'triggerType', 'interval')
+      if (key === 'interval') return triggerType === 'interval'
+      if (key === 'cronExpression') return triggerType === 'cron'
+      return true
+    }
+
+    case 'webhook-trigger':
+      if (key === 'responseCode' || key === 'responseData') {
+        return configValue(config, 'responseMode', 'onReceived') !== 'responseNode'
+      }
+      return true
+
+    case 'http-request': {
+      if (key === 'credentialId') return configValue(config, 'authentication', 'none') === 'predefinedCredential'
+      if (key === 'queryParameters') return configValue(config, 'sendQuery', false) === true
+      if (key === 'headers') return configValue(config, 'sendHeaders', true) === true
+      if (key === 'bodyContentType' || key === 'body') return configValue(config, 'sendBody', false) === true
+      return true
+    }
+
+    case 'if-else': {
+      const mode = configValue(config, 'mode', 'conditions')
+      if (key === 'combinator' || key === 'conditions') return mode === 'conditions'
+      if (key === 'condition') return mode === 'expression'
+      return true
+    }
+
+    case 'switch': {
+      const mode = configValue(config, 'mode', 'rules')
+      if (key === 'rules') return mode === 'rules'
+      if (key === 'expression' || key === 'cases') return mode === 'expression'
+      return true
+    }
+
+    case 'router': {
+      const mode = configValue(config, 'mode', 'rules')
+      if (key === 'rules') return mode === 'rules'
+      if (key === 'routeField') return mode === 'field'
+      return true
+    }
+
+    case 'transform': {
+      const operation = configValue(config, 'operation', 'sort')
+      if (key === 'field' || key === 'order') return operation === 'sort'
+      if (key === 'limit') return operation === 'limit'
+      if (key === 'aggregateFields') return operation === 'aggregate'
+      if (key === 'code') return operation === 'customCode'
+      return true
+    }
+
+    case 'delay': {
+      const mode = configValue(config, 'mode', 'timeInterval')
+      if (key === 'seconds') return mode === 'timeInterval'
+      if (key === 'resumeAt') return mode === 'specificTime'
+      if (key === 'webhookSuffix') return mode === 'webhook'
+      return true
+    }
+
+    default:
+      return true
+  }
 }
 
 interface NodeGuide {
@@ -186,6 +268,16 @@ interface ExpressionSuggestion {
   value?: unknown
 }
 
+interface ManualNodeRun {
+  status: 'idle' | 'running' | 'success' | 'error'
+  input: unknown
+  output?: unknown
+  error?: string
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
+}
+
 const hiddenMapperPaths = new Set([
   'input.triggered',
   'input.method',
@@ -209,6 +301,65 @@ function summarizeValue(value: unknown) {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return JSON.stringify(value)
+}
+
+function maskSensitiveNodeData(value: unknown, key = ''): unknown {
+  if (/password|secret|token|apiKeyValue|accessToken/i.test(key)) {
+    return value ? '••••••••' : value
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => maskSensitiveNodeData(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([itemKey, itemValue]) => [
+        itemKey,
+        maskSensitiveNodeData(itemValue, itemKey),
+      ])
+    )
+  }
+
+  return value
+}
+
+function formatNodeData(value: unknown) {
+  try {
+    return JSON.stringify(maskSensitiveNodeData(value), null, 2)
+  } catch {
+    return '{}'
+  }
+}
+
+function getConfigDefaults(nodeType: { defaultConfig: Record<string, unknown>; configSchema: ConfigField[] }) {
+  return nodeType.configSchema.reduce(
+    (defaults, field) => {
+      if (field.defaultValue !== undefined && defaults[field.key] === undefined) {
+        defaults[field.key] = field.defaultValue
+      }
+      return defaults
+    },
+    { ...nodeType.defaultConfig } as Record<string, unknown>
+  )
+}
+
+function mergeConfigDefaults(
+  nodeType: { defaultConfig: Record<string, unknown>; configSchema: ConfigField[] },
+  config: Record<string, unknown> | undefined
+) {
+  return {
+    ...getConfigDefaults(nodeType),
+    ...(config || {}),
+  }
+}
+
+function configHasMissingDefaults(
+  nodeType: { defaultConfig: Record<string, unknown>; configSchema: ConfigField[] },
+  config: Record<string, unknown> | undefined
+) {
+  const defaults = getConfigDefaults(nodeType)
+  return Object.keys(defaults).some((key) => config?.[key] === undefined)
 }
 
 function collectExpressionPaths(value: unknown, prefix: string, depth = 0): ExpressionSuggestion[] {
@@ -252,6 +403,37 @@ function getExampleOutputForNode(node: WorkflowNode) {
   return null
 }
 
+function getManualInputForNode(
+  node: WorkflowNode,
+  workflow: Workflow | null,
+  currentExecution: WorkflowExecution | null,
+  lastExecution?: WorkflowExecution
+) {
+  if (!workflow) return undefined
+
+  const incomingEdges = workflow.edges.filter((edge) => edge.target === node.id)
+  if (incomingEdges.length === 0) return undefined
+
+  const inputEntries = incomingEdges.map((edge) => {
+    const sourceNode = workflow.nodes.find((item) => item.id === edge.source)
+    const sourceOutput =
+      currentExecution?.nodeResults[edge.source]?.output ??
+      lastExecution?.nodeResults[edge.source]?.output ??
+      (sourceNode ? getExampleOutputForNode(sourceNode) : undefined)
+    const input =
+      edge.sourceHandle && sourceOutput && typeof sourceOutput === 'object'
+        ? (sourceOutput as Record<string, unknown>)[edge.sourceHandle] ?? sourceOutput
+        : sourceOutput
+    return { edge, input }
+  })
+
+  if (inputEntries.length === 1) return inputEntries[0].input
+
+  return Object.fromEntries(
+    inputEntries.map(({ edge, input }) => [edge.sourceHandle || edge.source, input])
+  )
+}
+
 function autoScrollConfigPanel(clientY: number, scrollContainer: HTMLDivElement) {
   const rect = scrollContainer.getBoundingClientRect()
   const edgeSize = 110
@@ -276,6 +458,7 @@ export function NodePanel({ className }: NodePanelProps) {
   const setSelectedNode = useWorkflowStore((s) => s.setSelectedNode)
   const globalVariables = useWorkflowStore((s) => s.globalVariables)
   const currentExecution = useWorkflowStore((s) => s.currentExecution)
+  const executionHistory = useWorkflowStore((s) => s.executionHistory)
   const workflow = useWorkflowStore((s) => s.getActiveWorkflow())
 
   const node = selectedNodeId ? getNode(selectedNodeId) : null
@@ -287,14 +470,21 @@ export function NodePanel({ className }: NodePanelProps) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [isDraggingExpression, setIsDraggingExpression] = useState(false)
   const [dragTargetField, setDragTargetField] = useState<string | null>(null)
+  const [manualRun, setManualRun] = useState<ManualNodeRun>({ status: 'idle', input: undefined })
   const configScrollRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (node?.data.config) {
-      setLocalConfig(node.data.config)
-      setValidationErrors({})
+    if (!node || !nodeType) return
+
+    const nextConfig = mergeConfigDefaults(nodeType, node.data.config)
+    setLocalConfig(nextConfig)
+    setValidationErrors({})
+    setManualRun({ status: 'idle', input: getManualInputForNode(node, workflow, currentExecution, executionHistory[0]) })
+
+    if (configHasMissingDefaults(nodeType, node.data.config)) {
+      updateNodeData(node.id, { config: nextConfig })
     }
-  }, [node?.data.config, selectedNodeId])
+  }, [node, nodeType, updateNodeData, workflow, currentExecution, executionHistory])
 
   const validateField = useCallback((field: ConfigField, value: unknown): string | null => {
     if (field.required && (!value || (typeof value === 'string' && value.trim() === ''))) {
@@ -316,8 +506,7 @@ export function NodePanel({ className }: NodePanelProps) {
   }, [t, tt])
 
   const handleConfigChange = useCallback((key: string, value: unknown, field?: ConfigField) => {
-    const newConfig = { ...localConfig, [key]: value }
-    setLocalConfig(newConfig)
+    setLocalConfig((currentConfig) => ({ ...currentConfig, [key]: value }))
     
     if (field) {
       const error = validateField(field, value)
@@ -331,7 +520,7 @@ export function NodePanel({ className }: NodePanelProps) {
     }
     
     updateNodeConfig(selectedNodeId!, { [key]: value })
-  }, [localConfig, selectedNodeId, updateNodeConfig, validateField])
+  }, [selectedNodeId, updateNodeConfig, validateField])
 
   const insertExpressionIntoField = useCallback((
     field: ConfigField,
@@ -423,15 +612,56 @@ export function NodePanel({ className }: NodePanelProps) {
     }
   }, [nodeResult?.output])
 
+  const handleManualNodeRun = useCallback(async () => {
+    if (!node || !workflow) return
+
+    const input = getManualInputForNode(node, workflow, currentExecution, executionHistory[0])
+    const startedAt = new Date().toISOString()
+    setManualRun({ status: 'running', input, startedAt })
+
+    try {
+      const output = await executeNode(node, input, {
+        workflow,
+        nodes: workflow.nodes,
+        edges: workflow.edges,
+        outputs: new Map(),
+      })
+      const finishedAt = new Date().toISOString()
+      setManualRun({
+        status: 'success',
+        input,
+        output,
+        startedAt,
+        finishedAt,
+        durationMs: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
+      })
+    } catch (error) {
+      const finishedAt = new Date().toISOString()
+      setManualRun({
+        status: 'error',
+        input,
+        error: error instanceof Error ? error.message : String(error),
+        startedAt,
+        finishedAt,
+        durationMs: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)),
+      })
+    }
+  }, [currentExecution, executionHistory, node, workflow])
+
   if (!node || !nodeType) {
     return (
-      <div className={cn('flex flex-col h-full bg-sidebar border-l border-sidebar-border', className)}>
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
-          <Settings className="w-8 h-8 mb-2 opacity-50" />
-          <p>{t('selectNode')}</p>
-          <p className="text-xs mt-1 opacity-70">{t('clickNode')}</p>
+      <aside className={cn('node-config-panel', className)}>
+        <div className="node-empty-state">
+          <div className="node-empty-icon">
+            <Settings className="h-9 w-9" />
+          </div>
+          <h3>{t('selectNodeTitle')}</h3>
+          <p>{t('selectNodeDescription')}</p>
+          <div className="node-empty-tip">
+            {t('emptyNodeTip')}
+          </div>
         </div>
-      </div>
+      </aside>
     )
   }
 
@@ -636,6 +866,7 @@ export function NodePanel({ className }: NodePanelProps) {
   const hasConnectionFields = connectionNodeTypes.has(node.type)
   const allConfigFields = (hasConnectionFields ? [...connectionFields, ...nodeType.configSchema] : nodeType.configSchema)
     .filter((field) => fieldIsVisible(field, localConfig))
+    .filter((field) => fieldMatchesNodeMode(node.type, field, localConfig))
   const guide = nodeGuides[node.type] || categoryGuides[nodeType.category]
   const requiredFields = allConfigFields.filter((field) => field.required)
   const missingRequiredFields = requiredFields.filter((field) => {
@@ -687,40 +918,146 @@ export function NodePanel({ className }: NodePanelProps) {
     setDragTargetField(null)
   }
 
+  const credentialFields = allConfigFields.filter((field) => connectionFieldKeys.has(field.key))
+  const parameterFields = allConfigFields.filter((field) => !connectionFieldKeys.has(field.key))
+  const historyForNode = executionHistory
+    .map((execution) => execution.nodeResults[node.id])
+    .filter(Boolean)
+    .slice(0, 8)
+  const currentOrManualError = manualRun.error || nodeResult?.error
+  const nodeStatus = currentOrManualError
+    ? t('error')
+    : missingRequiredFields.length > 0
+      ? t('unconfigured')
+      : t('configured')
+  const StatusBadgeClass = currentOrManualError
+    ? 'border-red-500/40 bg-red-500/10 text-red-600'
+    : missingRequiredFields.length > 0
+      ? 'border-amber-500/40 bg-amber-500/10 text-amber-600'
+      : 'border-green-500/40 bg-green-500/10 text-green-600'
+  const HeaderIcon =
+    nodeType.category === 'trigger' ? Play :
+    nodeType.category === 'logic' ? ArrowRight :
+    nodeType.category === 'transform' ? Code :
+    nodeType.category === 'action' ? Settings :
+    Info
+
+  const renderFieldList = (fields: ConfigField[]) => (
+    fields.length > 0 ? (
+      <div className="node-config-section">
+        {fields.map((field) => (
+          <div key={field.key} className="node-config-field">
+            <Label htmlFor={field.key} className="node-config-label">
+              {tt(field.label)}
+              {field.required && <span className="text-destructive">*</span>}
+            </Label>
+            {renderConfigField(field)}
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className={cn('rounded-lg border p-4 text-center', styles.bg, styles.border)}>
+        <p className={cn('text-sm', styles.text)}>{t('noConfig')}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('passThrough')}</p>
+      </div>
+    )
+  )
+
   return (
-    <div className={cn('flex flex-col h-full bg-sidebar border-l border-sidebar-border', className)}>
-      {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={cn('px-2 py-0.5 rounded text-xs font-medium shrink-0', styles.bg, styles.text)}>
-            {categoryLabel}
-          </span>
-          <span className="text-sm font-medium text-foreground truncate">{tt(nodeType.label)}</span>
+    <aside className={cn('node-config-panel', className)}>
+      <header className="node-config-header">
+        <div className="node-config-title-row">
+          <div className={cn('node-config-node-icon', styles.bg, styles.text)}>
+            <HeaderIcon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-semibold text-foreground">
+              {tt(node.data.label || nodeType.label)}
+            </h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {tt(nodeType.label)} · {categoryLabel}
+            </p>
+          </div>
+          <Badge variant="outline" className={cn('shrink-0 text-[10px]', StatusBadgeClass)}>
+            {nodeStatus}
+          </Badge>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleClose}>
+        <Button variant="ghost" size="icon" className="absolute right-2 top-2 h-7 w-7" onClick={handleClose}>
           <X className="w-4 h-4" />
         </Button>
-      </div>
+      </header>
 
-      <Tabs defaultValue="config" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full grid-cols-3 mx-3 mt-2 shrink-0" style={{ width: 'calc(100% - 24px)' }}>
-          <TabsTrigger value="config" className="text-xs">
-            <Settings className="w-3 h-3 mr-1" />
-            {t('config')}
+      <Tabs defaultValue="parameters" className="node-config-tabs-root">
+        <TabsList className="node-config-tabs">
+          <TabsTrigger value="parameters" className="node-config-tab">
+            {t('parameters')}
           </TabsTrigger>
-          <TabsTrigger value="output" className="text-xs">
-            <Play className="w-3 h-3 mr-1" />
-            {t('output')}
+          <TabsTrigger value="credentials" className="node-config-tab">
+            {t('credentials')}
           </TabsTrigger>
-          <TabsTrigger value="info" className="text-xs">
-            <Info className="w-3 h-3 mr-1" />
-            {t('info')}
+          <TabsTrigger value="execution" className="node-config-tab">
+            {t('execute')}
+          </TabsTrigger>
+          <TabsTrigger value="history" className="node-config-tab">
+            {t('history')}
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <div ref={configScrollRef} className="h-full overflow-y-auto" onDragOver={handleConfigDragOver}>
-            <TabsContent value="config" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
+        <section ref={configScrollRef} className="node-config-content" onDragOver={handleConfigDragOver}>
+          <TabsContent value="parameters" className="m-0 space-y-4 data-[state=inactive]:hidden">
+            <div className="rounded-lg border border-black/10 bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-white/10 dark:bg-[#202020]">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{t('selectedNodeData')}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{node.id}</p>
+                </div>
+                <Badge variant="outline" className={cn('shrink-0 text-[10px]', styles.bg, styles.text, styles.border)}>
+                  {categoryLabel}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-md border border-border bg-background/60 p-2">
+                  <p className="text-muted-foreground">{t('nodeType')}</p>
+                  <p className="mt-1 truncate font-medium text-foreground">{tt(nodeType.label)}</p>
+                </div>
+                <div className="rounded-md border border-border bg-background/60 p-2">
+                  <p className="text-muted-foreground">{t('position')}</p>
+                  <p className="mt-1 font-mono text-foreground">
+                    {Math.round(node.position.x)}, {Math.round(node.position.y)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-background/60 p-2">
+                  <p className="text-muted-foreground">{t('incomingConnections')}</p>
+                  <p className="mt-1 truncate font-medium text-foreground">
+                    {incomingNodes.length > 0
+                      ? incomingNodes.map((incoming) => tt(incoming!.data.label)).join(', ')
+                      : t('noConnections')}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-background/60 p-2">
+                  <p className="text-muted-foreground">{t('outgoingConnections')}</p>
+                  <p className="mt-1 truncate font-medium text-foreground">
+                    {outgoingNodes.length > 0
+                      ? outgoingNodes.map((outgoing) => tt(outgoing!.data.label)).join(', ')
+                      : t('noConnections')}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-1.5">
+                <Label className="text-xs text-muted-foreground">{t('configurationData')}</Label>
+                <pre className="max-h-44 overflow-auto rounded-md border border-border bg-[#111111] p-2 text-[11px] leading-relaxed text-[#d8f5d0]">
+                  {formatNodeData({
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    data: node.data,
+                  })}
+                </pre>
+              </div>
+            </div>
+
             <div className="rounded-lg border border-border bg-card/60 p-3 space-y-3">
               <div className="flex items-start gap-2">
                 <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -833,7 +1170,6 @@ export function NodePanel({ className }: NodePanelProps) {
               </p>
             </div>
 
-            {/* Label */}
             <div className="space-y-2">
               <Label htmlFor="node-label" className="text-sm text-foreground">
                 {t('nodeLabel')}
@@ -846,49 +1182,75 @@ export function NodePanel({ className }: NodePanelProps) {
               />
             </div>
 
-            {/* Config fields */}
-            {hasConnectionFields && (
-              <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
-                <div className="flex items-start gap-2">
-                  <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
-                  <div>
-                    <p className="text-sm font-medium text-blue-300">{t('connection')}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t('connectionDescription')}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {hasConfigFields || hasConnectionFields ? (
-              <>
-                <div className="h-px bg-border" />
-                <div className="space-y-4">
-                  {allConfigFields.map((field) => (
-                    <div key={field.key} className="space-y-2">
-                      <Label htmlFor={field.key} className="text-sm text-muted-foreground flex items-center gap-1">
-                        {tt(field.label)}
-                        {field.required && <span className="text-destructive">*</span>}
-                      </Label>
-                      {renderConfigField(field)}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className={cn('p-4 rounded-lg text-center', styles.bg, styles.border, 'border')}>
-                <p className={cn('text-sm', styles.text)}>
-                  {t('noConfig')}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('passThrough')}
-                </p>
-              </div>
-            )}
+            {renderFieldList(parameterFields)}
           </TabsContent>
 
-          <TabsContent value="output" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
+          <TabsContent value="credentials" className="m-0 space-y-4 data-[state=inactive]:hidden">
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+              <div className="flex items-start gap-2">
+                <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t('connection')}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t('connectionDescription')}</p>
+                </div>
+              </div>
+            </div>
+            {renderFieldList(credentialFields)}
+          </TabsContent>
+
+          <TabsContent value="execution" className="m-0 space-y-4 data-[state=inactive]:hidden">
+            <div className="rounded-lg border border-black/10 bg-white p-3 shadow-[0_1px_0_rgba(0,0,0,0.03)] dark:border-white/10 dark:bg-[#202020]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{t('manualRun')}</p>
+                  <p className="text-xs text-muted-foreground">{t('executeSelectedNode')}</p>
+                </div>
+                <Button size="sm" onClick={handleManualNodeRun} disabled={manualRun.status === 'running'} className="h-8">
+                  {manualRun.status === 'running' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                  {t('runNode')}
+                </Button>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    manualRun.status === 'success' && 'border-green-500/40 text-green-500',
+                    manualRun.status === 'error' && 'border-red-500/40 text-red-500',
+                    manualRun.status === 'running' && 'border-amber-500/40 text-amber-500'
+                  )}
+                >
+                  {manualRun.status}
+                </Badge>
+                {manualRun.durationMs !== undefined && <span className="text-muted-foreground">{manualRun.durationMs}ms</span>}
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <details open={manualRun.status !== 'idle'}>
+                  <summary className="cursor-pointer text-xs font-medium text-muted-foreground">{t('inputs')}</summary>
+                  <pre className="mt-1 max-h-36 overflow-auto rounded-md border border-border bg-background/60 p-2 text-[11px]">
+                    {JSON.stringify(manualRun.input ?? null, null, 2)}
+                  </pre>
+                </details>
+
+                {manualRun.output !== undefined && (
+                  <details open>
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground">{t('output')}</summary>
+                    <pre className="mt-1 max-h-36 overflow-auto rounded-md border border-border bg-background/60 p-2 text-[11px]">
+                      {JSON.stringify(manualRun.output, null, 2)}
+                    </pre>
+                  </details>
+                )}
+
+                {manualRun.error && (
+                  <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2">
+                    <p className="text-xs font-medium text-red-400">{t('error')}</p>
+                    <pre className="mt-1 max-h-36 overflow-auto text-[11px] text-red-400">{manualRun.error}</pre>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {nodeResult ? (
               <>
                 <div className={cn(
@@ -966,7 +1328,33 @@ export function NodePanel({ className }: NodePanelProps) {
             )}
           </TabsContent>
 
-          <TabsContent value="info" className="p-3 space-y-4 mt-0 data-[state=inactive]:hidden">
+          <TabsContent value="history" className="m-0 space-y-4 data-[state=inactive]:hidden">
+            {historyForNode.length === 0 ? (
+              <div className="rounded-lg border border-border bg-white p-6 text-center text-sm text-muted-foreground dark:bg-[#202020]">
+                {t('noNodeHistory')}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {historyForNode.map((result, index) => (
+                  <div key={`${result.nodeId}-${result.startTime}-${index}`} className="rounded-lg border border-border bg-white p-3 text-xs dark:bg-[#202020]">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant="outline">{t(result.status)}</Badge>
+                      <span className="text-muted-foreground">{result.durationMs ?? result.duration ?? 0}ms</span>
+                    </div>
+                    {result.error && <pre className="mt-2 rounded bg-red-500/10 p-2 text-red-500">{result.error}</pre>}
+                    {result.output !== undefined && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-muted-foreground">{t('output')}</summary>
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-background/60 p-2">
+                          {JSON.stringify(result.output, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3">
               <div>
                 <Label className="text-xs text-muted-foreground">{t('nodeType')}</Label>
@@ -1022,22 +1410,21 @@ export function NodePanel({ className }: NodePanelProps) {
               </div>
             </div>
           </TabsContent>
-          </div>
-        </div>
+        </section>
       </Tabs>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border">
-        <Button
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={handleDelete}
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          {t('deleteNode')}
+      <footer className="node-config-footer">
+        <Button variant="outline" size="sm" onClick={handleClose}>
+          {t('cancel')}
         </Button>
-      </div>
-    </div>
+        <Button variant="outline" size="sm" onClick={() => updateNodeData(node.id, { config: localConfig })}>
+          {t('saveChanges')}
+        </Button>
+        <Button size="sm" onClick={handleManualNodeRun} disabled={manualRun.status === 'running'}>
+          {manualRun.status === 'running' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+          {t('runNode')}
+        </Button>
+      </footer>
+    </aside>
   )
 }

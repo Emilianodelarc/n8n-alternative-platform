@@ -36,6 +36,16 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { LanguageToggle } from '@/components/language-toggle'
 import { useI18n } from '@/lib/i18n'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -57,6 +67,9 @@ export default function DashboardPage() {
   const [newWorkflowName, setNewWorkflowName] = useState('')
   const [newWorkflowDescription, setNewWorkflowDescription] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [workflowIdToDelete, setWorkflowIdToDelete] = useState<string | null>(null)
+
+  const workflowToDelete = workflows.find((workflow) => workflow.id === workflowIdToDelete)
 
   useEffect(() => {
     // Rehydrate store from localStorage on client
@@ -84,10 +97,10 @@ export default function DashboardPage() {
     duplicateWorkflow(id)
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm(t('deleteWorkflowConfirm'))) {
-      deleteWorkflow(id)
-    }
+  const handleDelete = () => {
+    if (!workflowIdToDelete) return
+    deleteWorkflow(workflowIdToDelete)
+    setWorkflowIdToDelete(null)
   }
 
   const getCategoryColor = (category: string) => {
@@ -280,7 +293,7 @@ export default function DashboardPage() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => handleDelete(workflow.id)}
+                            onClick={() => setWorkflowIdToDelete(workflow.id)}
                             className="text-destructive"
                           >
                             <Trash2 className="w-4 h-4 mr-2" />
@@ -326,6 +339,45 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      <AlertDialog open={Boolean(workflowIdToDelete)} onOpenChange={(open) => !open && setWorkflowIdToDelete(null)}>
+        <AlertDialogContent className="max-w-md overflow-hidden p-0">
+          <div className="border-b bg-destructive/5 px-6 py-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <AlertDialogHeader className="gap-1 text-left">
+                <AlertDialogTitle>{t('deleteWorkflowTitle')}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('deleteWorkflowDescription')}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+            </div>
+          </div>
+          {workflowToDelete && (
+            <div className="px-6 py-4">
+              <div className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+                <span className="font-medium text-foreground">{tt(workflowToDelete.name)}</span>
+                {workflowToDelete.description && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {tt(workflowToDelete.description)}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter className="border-t bg-muted/20 px-6 py-4">
+            <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              {t('confirmDelete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

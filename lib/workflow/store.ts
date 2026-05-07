@@ -477,7 +477,7 @@ export const useWorkflowStore = create<WorkflowState>()(
                   ...w,
                   nodes: w.nodes.map((n) =>
                     n.id === nodeId
-                      ? { ...n, data: { ...n.data, config: { ...n.data.config, ...config } } }
+                      ? { ...n, data: { ...n.data, config: { ...(n.data.config || {}), ...config } } }
                       : n
                   ),
                   updatedAt: new Date().toISOString(),

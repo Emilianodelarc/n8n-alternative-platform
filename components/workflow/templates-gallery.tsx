@@ -27,7 +27,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useWorkflowStore } from '@/lib/workflow/store'
-import type { Workflow } from '@/lib/workflow/types'
+import { NODE_TYPES, type Workflow } from '@/lib/workflow/types'
 import { useI18n } from '@/lib/i18n'
 
 interface WorkflowTemplate {
@@ -471,15 +471,23 @@ export function TemplatesGallery({ onClose }: TemplatesGalleryProps) {
       id: crypto.randomUUID(),
       name: tt(template.workflow.name),
       description: template.workflow.description ? tt(template.workflow.description) : undefined,
-      nodes: template.workflow.nodes.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          label: tt(node.data.label),
-          description: node.data.description ? tt(node.data.description) : undefined,
-          config: translateValue(node.data.config) as Record<string, unknown>,
-        },
-      })),
+      nodes: template.workflow.nodes.map((node) => {
+        const nodeDefinition = NODE_TYPES[node.type]
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            label: tt(nodeDefinition?.label ?? node.data.label),
+            description: node.data.description
+              ? tt(node.data.description)
+              : nodeDefinition?.description
+                ? tt(nodeDefinition.description)
+                : undefined,
+            config: translateValue(node.data.config) as Record<string, unknown>,
+          },
+        }
+      }),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }

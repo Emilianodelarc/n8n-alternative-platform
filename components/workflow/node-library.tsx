@@ -153,11 +153,13 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
   const categories: NodeCategory[] = ['trigger', 'action', 'logic', 'transform', 'utility']
 
   return (
-    <div className={cn('flex h-full min-h-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar', className)}>
-      <div className="shrink-0 border-b border-sidebar-border p-3">
+    <div className={cn('flex h-full min-h-0 flex-col overflow-hidden border-r border-black/10 bg-[#fbfaf8] dark:border-white/10 dark:bg-[#1b1b1b]', className)}>
+      <div className="shrink-0 border-b border-black/10 p-3 dark:border-white/10">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-foreground">{t('nodes')}</h2>
-          <span className="rounded border border-sidebar-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          <div>
+            <h2 className="text-sm font-semibold leading-tight text-foreground">{t('nodes')}</h2>
+          </div>
+          <span className="rounded border border-black/10 bg-[#f1f0ec] px-1.5 py-0.5 text-[10px] text-muted-foreground dark:border-white/10 dark:bg-[#242424]">
             {filteredNodes.length}
           </span>
         </div>
@@ -167,7 +169,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
             placeholder={t('searchNodes')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 border-sidebar-border bg-sidebar-accent pl-8 text-sm"
+            className="h-9 rounded-md border-black/10 bg-[#f1f0ec] pl-8 text-sm shadow-none dark:border-white/10 dark:bg-[#242424]"
           />
         </div>
       </div>
@@ -187,7 +189,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
               <div key={category} className="mb-2.5">
                 <button
                   onClick={() => toggleCategory(category)}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs font-semibold uppercase tracking-normal text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold uppercase tracking-normal text-muted-foreground transition-colors hover:bg-[#f1f0ec] hover:text-foreground dark:hover:bg-[#242424]"
                 >
                   {isExpanded ? (
                     <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -213,7 +215,7 @@ export function NodeLibrary({ className }: NodeLibraryProps) {
                           onDragStart={(e) => onDragStart(e, node)}
                           className={cn(
                             'flex cursor-grab items-center gap-2 rounded-md border border-sidebar-border bg-card px-2.5 py-2 active:cursor-grabbing',
-                            'transition-colors hover:border-primary/40 hover:bg-accent/70 hover:shadow-sm'
+                            'border-black/10 bg-white shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-colors hover:border-[#ff6d5a]/50 hover:bg-[#fff7f5] hover:shadow-sm dark:border-white/10 dark:bg-[#202020] dark:hover:bg-[#28221f]'
                           )}
                         >
                           <span className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded border', styles.bg, styles.border)}>

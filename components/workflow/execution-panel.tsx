@@ -92,6 +92,11 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
           <div className="p-4 space-y-3">
             {nodeResults.map(([nodeId, result]) => {
               const node = workflow?.nodes.find((n) => n.id === nodeId)
+              const nodeLabel = result.nodeLabel || node?.data.label || nodeId
+              const nodeType = result.nodeType || node?.type
+              const duration = result.durationMs ?? result.duration
+              const startedAt = result.startedAt || result.startTime
+              const finishedAt = result.finishedAt || result.endTime
               return (
                 <div
                   key={nodeId}
@@ -110,14 +115,35 @@ export function ExecutionPanel({ className }: ExecutionPanelProps) {
                       {result.status === 'success' && <CheckCircle2 className="w-4 h-4 text-green-400" />}
                       {result.status === 'error' && <XCircle className="w-4 h-4 text-red-400" />}
                       {result.status === 'pending' && <Clock className="w-4 h-4 text-muted-foreground" />}
-                      <span className="text-sm font-medium text-foreground">
-                        {node?.data.label ? tt(node.data.label) : nodeId}
-                      </span>
+                      <div className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {tt(nodeLabel)}
+                        </span>
+                        {nodeType && (
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {nodeType}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {result.duration !== undefined && (
-                      <span className="text-xs text-muted-foreground">{result.duration}ms</span>
+                    {duration !== undefined && (
+                      <span className="text-xs text-muted-foreground">{duration}ms</span>
                     )}
                   </div>
+
+                  <div className="grid gap-2 text-[11px] text-muted-foreground sm:grid-cols-2">
+                    <span>{t('started')}: {startedAt ? new Date(startedAt).toLocaleTimeString() : '-'}</span>
+                    <span>{t('finished')}: {finishedAt ? new Date(finishedAt).toLocaleTimeString() : '-'}</span>
+                  </div>
+
+                  {result.input !== undefined && result.input !== null && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1">{t('inputs')}:</p>
+                      <pre className="p-2 rounded bg-background/50 text-xs font-mono overflow-auto max-h-24">
+                        {JSON.stringify(result.input, null, 2)}
+                      </pre>
+                    </div>
+                  )}
 
                   {result.output !== undefined && (
                     <div className="mt-2">
